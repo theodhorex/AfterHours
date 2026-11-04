@@ -8,6 +8,7 @@ import { MarketPanel } from "../components/MarketPanel.tsx";
 import { ChronicleList } from "../components/ChronicleList.tsx";
 import { SimulationControls } from "../components/SimulationControls.tsx";
 import { AuditPanel } from "../components/AuditPanel.tsx";
+import { AgentsPanel } from "../components/AgentsPanel.tsx";
 
 const IsoCity = dynamic(
   () => import("../components/IsoCity.tsx").then((mod) => mod.IsoCity),
@@ -222,6 +223,9 @@ export default function CityViewPage() {
               cityId={world.state.city_id}
               checkpoints={world.checkpoints}
             />
+
+            {/* Autonomous Agent Backtester & Verified Leaderboard */}
+            <AgentsPanel arcId={arcId} seed={seed} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column: District Detail */}

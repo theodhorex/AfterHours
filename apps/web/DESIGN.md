@@ -121,3 +121,25 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
   - *Verified State*: High-contrast moss banner (`--atlas-moss`) affirming replayed consistency: `"VERIFIED: N checkpoints match the replay"`.
   - *Mismatch / Tampered State*: Alert badge (`--atlas-alert`) displaying exact difference reason (e.g. `produced amount mismatch`, `new_state_root mismatch`, `stage mismatch`).
 
+---
+
+## 9. Agents Panel (JSON Rule Editor, Backtest & Verified Leaderboard)
+- **Visual Style & Philosophy**:
+  - Presented as the municipal ledger's autonomous trading desk and merchant contract registry.
+  - Consistent fantasy parchment theme: charred canvas backing (`--atlas-surface`), hairline borders (`--atlas-line`), gold accents (`--atlas-gold`) for actions and primary triggers, moss (`--atlas-moss`) for gains and verification badges, and ember/alert (`--atlas-alert`) for losses and syntax errors.
+- **Copy Standards**:
+  - Honest copy: *"Anyone can re-run this agent on the same seed and get the same score and state root (mock mode, no chain)"*.
+  - Rule limits and trade conditions clearly explained (8 rules, 3 conditions, 4 orders/step, 2 coin fee/rule).
+  - Clarifies that autonomous agents execute only while the player is offline in a deployed version.
+- **Accessibility & Interaction (WCAG 2.1 AA)**:
+  - Screen reader live regions: `aria-live="polite"` region communicates real-time schema validation feedback.
+  - Progress feedback: Asynchronous chunked execution during backtest simulation yields to the event loop and announces status.
+  - Accessible forms & controls: Form controls have explicit `<label>` associations, monospace textareas have spellcheck disabled, and buttons feature 2px gold focus rings (`atlas-focus`).
+  - Table a11y: `<caption>` with screen-reader announcement, structured column headers (`scope="col"`), and responsive horizontal scroll wrapper ensuring zero layout blowouts at 360px.
+- **Panel States**:
+  - *Ready / Idle State*: Preset selected, JSON editor populated and validated, backtest button active.
+  - *Syntax / Schema Error State*: Monospace error callout highlighting offending rule property or syntax issue; backtest trigger disabled.
+  - *Simulating State*: Animated progress indicator and disabled buttons preventing duplicate runs.
+  - *Verified Leaderboard State*: Interactive rankings displaying score, trades, 12-char root preview, and instant "Re-verify" checking.
+  - *Storage Fallback State*: Gracefully functions in in-memory state when local storage access is restricted or throws.
+
