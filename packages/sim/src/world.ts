@@ -2,14 +2,10 @@
  * Multi-city world runner for AfterHours simulation.
  * Pure orchestration of multi-city stepping, inter-city caravans, and verifiable checkpoints.
  * Erasable TypeScript only, zero external dependencies, BigInt arithmetic.
+ * Browser-safe: requires pricing, growth, and arcs injected.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { parseArc } from "./arc.ts";
 import { genesis } from "./genesis.ts";
-import { parsePricingRules } from "./pricing.ts";
-import { parseGrowthRules } from "./growth.ts";
 import { step } from "./step.ts";
 import { cityRoot, nextStateRoot, eventRoot, genesisPrevRoot } from "./roots.ts";
 import { buildCheckpoint } from "./checkpoint.ts";
@@ -39,9 +35,9 @@ export interface WorldConfig {
   caravanEvery?: number;
   routes?: CaravanRoute[];
   dataDir?: string;
-  pricing?: PricingRules;
-  growth?: GrowthRules;
-  arcs?: Record<string, ArcFile>;
+  pricing: PricingRules;
+  growth: GrowthRules;
+  arcs: Record<string, ArcFile>;
 }
 
 export interface WorldCityResult {
@@ -83,24 +79,17 @@ export function runWorld(cfg: WorldConfig): RunWorldResult {
   if (cfg.steps % cfg.window !== 0) {
     throw new RangeError(`steps (${cfg.steps}) must be divisible by window (${cfg.window})`);
   }
-
-  const dir = cfg.dataDir ?? join(process.cwd(), "data");
-  const pricing = cfg.pricing ?? parsePricingRules(readFileSync(join(dir, "pricing.rules.json"), "utf-8"));
-  const growth = cfg.growth ?? parseGrowthRules(JSON.parse(readFileSync(join(dir, "growth.rules.json"), "utf-8")));
-
-  const arcCache = new Map<string, ArcFile>();
-  if (cfg.arcs) {
-    for (const [id, arc] of Object.entries(cfg.arcs)) {
-      arcCache.set(id, arc);
-    }
+  if (!cfg.pricing || !cfg.growth || !cfg.arcs) {
+    throw new Error("runWorld requires pricing, growth, and arcs to be injected");
   }
 
+  const pricing = cfg.pricing;
+  const growth = cfg.growth;
+
   const getArc = (arcId: string): ArcFile => {
-    let arc = arcCache.get(arcId);
+    const arc = cfg.arcs[arcId];
     if (!arc) {
-      const raw = JSON.parse(readFileSync(join(dir, "arcs", `${arcId}.json`), "utf-8"));
-      arc = parseArc(raw);
-      arcCache.set(arcId, arc);
+      throw new Error(`Missing arc definition for '${arcId}'`);
     }
     return arc;
   };

@@ -11,10 +11,12 @@ import { cityRoot, nextStateRoot, eventRoot, genesisPrevRoot } from "../src/root
 import { buildCheckpoint, checkConservation } from "../src/checkpoint.ts";
 import { canonicalJson } from "../src/canonical.ts";
 import { runWorld } from "../src/world.ts";
+import { loadWorldData } from "../src/world-node.ts";
 import type { Checkpoint } from "../src/checkpoint.ts";
 import type { SimEvent } from "../src/types.ts";
 
 const root = join(process.cwd(), "data");
+const worldData = loadWorldData(root);
 
 function runDemoMockLogic(arcId: string, seed: string, cityId: string, totalSteps: number, windowSize: number): Checkpoint[] {
   const arcRaw = JSON.parse(readFileSync(join(root, "arcs", `${arcId}.json`), "utf-8"));
@@ -71,7 +73,7 @@ test("Item 1: runWorld skeleton is byte-identical to demo_mock when routes are e
     window: windowSize,
     caravanEvery: 0,
     routes: [],
-    dataDir: root,
+    ...worldData,
   });
 
   const actualCheckpoints = result.checkpoints[cityId];
@@ -95,7 +97,7 @@ test("Item 2: Caravans in the loop (dino_vale -> elf_grove 400 steps), conservat
       { from: cityA, to: cityB, item: "grain", maxQty: 50n },
       { from: cityA, to: cityB, item: "bread", maxQty: 30n },
     ],
-    dataDir: root,
+    ...worldData,
   };
 
   const arcDino = parseArc(JSON.parse(readFileSync(join(root, "arcs/dino_vale.json"), "utf-8")));
@@ -208,7 +210,7 @@ test("Property-based testing: seeded loop over route configs asserting conservat
       routes: [
         { from: "dino", to: "elf", item: "grain", maxQty: 25n },
       ],
-      dataDir: root,
+      ...worldData,
     };
 
     const res1 = runWorld(cfg);
@@ -254,7 +256,7 @@ test("Doubt-driven edge cases: route to self, unknown item, empty inventory, car
     window: 20,
     caravanEvery: 5,
     routes: [{ from: cityA, to: cityA, item: "grain", maxQty: 10n }],
-    dataDir: root,
+    ...worldData,
   });
   const selfEvents = resSelf.events[cityA].filter((e) => e.event === "caravan_out" || e.event === "caravan_in");
   assert.equal(selfEvents.length, 0, "Route to self must not execute");
@@ -269,7 +271,7 @@ test("Doubt-driven edge cases: route to self, unknown item, empty inventory, car
     window: 20,
     caravanEvery: 5,
     routes: [{ from: cityA, to: cityB, item: "non_existent_item_xyz", maxQty: 10n }],
-    dataDir: root,
+    ...worldData,
   });
   const unknownEvents = resUnknown.events[cityA].filter((e) => e.event === "caravan_out");
   assert.equal(unknownEvents.length, 0, "Unknown item must be rejected");
@@ -284,7 +286,7 @@ test("Doubt-driven edge cases: route to self, unknown item, empty inventory, car
     window: 20,
     caravanEvery: 1000,
     routes: [{ from: cityA, to: cityB, item: "grain", maxQty: 10n }],
-    dataDir: root,
+    ...worldData,
   });
   const largeEveryEvents = resLargeEvery.events[cityA].filter((e) => e.event === "caravan_out");
   assert.equal(largeEveryEvents.length, 0, "caravanEvery > steps must not trigger caravans");
@@ -304,7 +306,7 @@ test("Item 3: runWorld twice with the same cfg gives identical final state roots
       { from: "dino", to: "elf", item: "grain", maxQty: 40n },
       { from: "dino", to: "elf", item: "bread", maxQty: 20n },
     ],
-    dataDir: root,
+    ...worldData,
   };
 
   const run1 = runWorld(cfg);
@@ -320,5 +322,11 @@ test("Item 3: runWorld twice with the same cfg gives identical final state roots
     assert.equal(finalCp1.new_state_root, finalCp2.new_state_root);
     assert.equal(finalCp1.new_state_root, finalRoot1);
   }
+});
+
+test("world.ts purity: has no node: imports", () => {
+  const worldSource = readFileSync(join(process.cwd(), "packages/sim/src/world.ts"), "utf-8");
+  const matches = worldSource.match(/node:/g);
+  assert.equal(matches, null, "world.ts must not contain any node: imports");
 });
 

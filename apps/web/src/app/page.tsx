@@ -8,6 +8,7 @@ import { MarketPanel } from "../components/MarketPanel.tsx";
 import { ChronicleList } from "../components/ChronicleList.tsx";
 import { SimulationControls } from "../components/SimulationControls.tsx";
 import { AuditPanel } from "../components/AuditPanel.tsx";
+import { CaravanPanel } from "../components/CaravanPanel.tsx";
 import { AgentsPanel } from "../components/AgentsPanel.tsx";
 
 const IsoCity = dynamic(
@@ -223,6 +224,9 @@ export default function CityViewPage() {
               cityId={world.state.city_id}
               checkpoints={world.checkpoints}
             />
+
+            {/* Inter-City Caravan Trade Panel */}
+            <CaravanPanel />
 
             {/* Autonomous Agent Backtester & Verified Leaderboard */}
             <AgentsPanel arcId={arcId} seed={seed} />
