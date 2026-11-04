@@ -1,6 +1,7 @@
 /**
- * Economy report: runs every arc in data/arcs for 2000 steps (500 years) and prints a row every 200 steps.
- * Usage: node scripts/economy_report.ts [arc_id ...]
+ * Economy report: runs arcs in data/arcs for 2000 steps and prints
+ * stage reached, population min/max/final, open/total businesses, satisfaction, bankruptcies.
+ * Usage: node scripts/economy_report.ts [--seed <seed>] [--steps <n>] [arc_id ...]
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -15,24 +16,65 @@ const read = (p: string): unknown => JSON.parse(readFileSync(join(root, p), "utf
 const pricing = parsePricingRules(readFileSync(join(root, "data/pricing.rules.json"), "utf-8"));
 const growth = parseGrowthRules(read("data/growth.rules.json"));
 
-const wanted = process.argv.slice(2);
+const args = process.argv.slice(2);
+let seed = "demo";
+let steps = 2000;
+const wanted: string[] = [];
+
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--seed" && i + 1 < args.length) {
+    seed = args[++i];
+  } else if (args[i] === "--steps" && i + 1 < args.length) {
+    steps = parseInt(args[++i], 10);
+  } else if (!args[i].startsWith("--")) {
+    wanted.push(args[i]);
+  }
+}
+
 const files = readdirSync(join(root, "data/arcs")).filter((f) => f.endsWith(".json")).sort();
 const arcs = files
   .map((f) => parseArc(read(`data/arcs/${f}`)))
   .filter((a) => wanted.length === 0 || wanted.includes(a.id));
 
-const STEPS = 2000;
 const EVERY = 200;
+interface ArcSummary {
+  id: string;
+  name: string;
+  stageName: string;
+  stageIndex: number;
+  minPop: bigint;
+  maxPop: bigint;
+  finalPop: bigint;
+  openBiz: number;
+  totalBiz: number;
+  satBps: bigint;
+  bankruptcies: number;
+}
+
+const summaries: ArcSummary[] = [];
+
 for (const arc of arcs) {
-  console.log(`\n=== ${arc.name} (${arc.id}) ===`);
+  console.log(`\n=== ${arc.name} (${arc.id}) [seed: ${seed}, steps: ${steps}] ===`);
   console.log("step | year | stage            | pop  | sat(bps) | open/closed | opened | total coin");
-  let state = genesis(arc, `city-${arc.id}`, "seed-report");
+  let state = genesis(arc, `city-${arc.id}`, seed);
   let opened = 0;
-  for (let s = 1; s <= STEPS; s++) {
+  let bankruptcies = 0;
+  let minPop = state.citizens.population;
+  let maxPop = state.citizens.population;
+
+  for (let s = 1; s <= steps; s++) {
     const res = step(state, { arc, pricing, growth });
     state = res.state;
-    opened += res.events.filter((e) => e.event === "business_opened").length;
-    if (s % EVERY === 0) {
+    const pop = state.citizens.population;
+    if (pop < minPop) minPop = pop;
+    if (pop > maxPop) maxPop = pop;
+
+    for (const e of res.events) {
+      if (e.event === "business_opened") opened++;
+      if (e.event === "business_closed") bankruptcies++;
+    }
+
+    if (s % EVERY === 0 || s === steps) {
       let open = 0, closed = 0, coin = state.citizens.purse + state.treasury;
       for (const sec of state.sectors) for (const b of sec.businesses) { if (b.open) open++; else closed++; coin += b.coin; }
       console.log(
@@ -40,4 +82,36 @@ for (const arc of arcs) {
       );
     }
   }
+
+  let finalOpen = 0, finalClosed = 0;
+  for (const sec of state.sectors) {
+    for (const b of sec.businesses) {
+      if (b.open) finalOpen++;
+      else finalClosed++;
+    }
+  }
+
+  summaries.push({
+    id: arc.id,
+    name: arc.name,
+    stageName: arc.stages[state.stage].id,
+    stageIndex: state.stage,
+    minPop,
+    maxPop,
+    finalPop: state.citizens.population,
+    openBiz: finalOpen,
+    totalBiz: finalOpen + finalClosed,
+    satBps: state.citizens.satisfaction_bps,
+    bankruptcies,
+  });
+}
+
+console.log("\n### Summary Table (seed: " + seed + ", steps: " + steps + ")");
+console.log("| Arc | Stage reached | Pop (min/max/final) | Open/Total | Satisfaction | Bankruptcies |");
+console.log("|---|---|---|---|---|---|");
+for (const s of summaries) {
+  const satPct = (Number(s.satBps) / 100).toFixed(1) + "%";
+  console.log(
+    `| ${s.name} | ${s.stageName} (${s.stageIndex}) | ${s.minPop} / ${s.maxPop} / ${s.finalPop} | ${s.openBiz}/${s.totalBiz} | ${satPct} (${s.satBps} bps) | ${s.bankruptcies} |`,
+  );
 }
