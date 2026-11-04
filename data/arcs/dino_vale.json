@@ -1,0 +1,186 @@
+{
+  "id": "dino_vale",
+  "name": "Dino Vale",
+  "server": "tarn",
+  "version": 1,
+  "items": [
+    { "id": "grain", "base_price": 5, "tier": "staple" },
+    { "id": "flour", "base_price": 15, "tier": "staple" },
+    { "id": "bread", "base_price": 13, "tier": "staple" },
+    { "id": "fish", "base_price": 7, "tier": "staple" },
+    { "id": "ore", "base_price": 9, "tier": "raw" },
+    { "id": "amber", "base_price": 12, "tier": "raw" },
+    { "id": "crystal", "base_price": 57, "tier": "raw" },
+    { "id": "ingot", "base_price": 48, "tier": "refined" },
+    { "id": "tool", "base_price": 110, "tier": "luxury" },
+    { "id": "elixir", "base_price": 139, "tier": "luxury" },
+    { "id": "scroll", "base_price": 119, "tier": "luxury" },
+    { "id": "fossil", "base_price": 85, "tier": "luxury" }
+  ],
+  "sectors": [
+    { "idx": 0, "kind": "food", "name": "Egg Pastures" },
+    { "idx": 1, "kind": "ore", "name": "Fossil Quarries" },
+    { "idx": 2, "kind": "forge", "name": "Bone Smithies" },
+    { "idx": 3, "kind": "alchemy", "name": "Tar Pits" },
+    { "idx": 4, "kind": "harbor", "name": "River Crossing" },
+    { "idx": 5, "kind": "tower", "name": "Raptor Roosts" }
+  ],
+  "recipes": [
+    {
+      "id": "egg_farm",
+      "sector": 0,
+      "inputs": {},
+      "outputs": { "grain": 4 },
+      "wage": 16,
+      "max_per_run_per_business": 50
+    },
+    {
+      "id": "grinding_stones",
+      "sector": 0,
+      "inputs": { "grain": 2 },
+      "outputs": { "flour": 2 },
+      "wage": 14,
+      "max_per_run_per_business": 45
+    },
+    {
+      "id": "pit_oven",
+      "sector": 0,
+      "inputs": { "flour": 1 },
+      "outputs": { "bread": 3 },
+      "wage": 15,
+      "max_per_run_per_business": 40
+    },
+    {
+      "id": "quarry",
+      "sector": 1,
+      "inputs": {},
+      "outputs": { "ore": 3 },
+      "wage": 20,
+      "max_per_run_per_business": 35
+    },
+    {
+      "id": "amber_dig",
+      "sector": 1,
+      "inputs": {},
+      "outputs": { "amber": 2 },
+      "wage": 18,
+      "max_per_run_per_business": 25
+    },
+    {
+      "id": "crystal_pit",
+      "sector": 1,
+      "inputs": {},
+      "outputs": { "crystal": 1 },
+      "wage": 45,
+      "max_per_run_per_business": 10
+    },
+    {
+      "id": "smelter",
+      "sector": 2,
+      "inputs": { "ore": 2 },
+      "outputs": { "ingot": 1 },
+      "wage": 20,
+      "max_per_run_per_business": 25
+    },
+    {
+      "id": "bone_smith",
+      "sector": 2,
+      "inputs": { "ingot": 1, "amber": 1 },
+      "outputs": { "tool": 1 },
+      "wage": 28,
+      "max_per_run_per_business": 15
+    },
+    {
+      "id": "tar_still",
+      "sector": 3,
+      "inputs": { "crystal": 1, "amber": 1 },
+      "outputs": { "elixir": 1 },
+      "wage": 42,
+      "max_per_run_per_business": 8
+    },
+    {
+      "id": "fishery",
+      "sector": 4,
+      "inputs": {},
+      "outputs": { "fish": 3 },
+      "wage": 15,
+      "max_per_run_per_business": 35
+    },
+    {
+      "id": "rock_scribe",
+      "sector": 5,
+      "inputs": { "crystal": 1 },
+      "outputs": { "scroll": 1 },
+      "wage": 38,
+      "max_per_run_per_business": 8
+    },
+    {
+      "id": "fossil_carver",
+      "sector": 5,
+      "inputs": { "amber": 2, "ore": 1 },
+      "outputs": { "fossil": 1 },
+      "wage": 35,
+      "max_per_run_per_business": 10
+    }
+  ],
+  "citizens": {
+    "start_population": 80,
+    "needs": [
+      { "item": "bread", "per_capita_milli": 1100, "alt": ["fish"], "satisfaction_weight": 6000 },
+      { "item": "tool", "per_capita_milli": 25, "alt": [], "satisfaction_weight": 1500 },
+      { "item": "elixir", "per_capita_milli": 6, "alt": [], "satisfaction_weight": 1000 },
+      { "item": "fossil", "per_capita_milli": 10, "alt": [], "satisfaction_weight": 1500 }
+    ]
+  },
+  "stages": [
+    { "id": "nesting_camp", "min_population": 0, "max_businesses_per_sector": 2 },
+    { "id": "herders_enclosure", "min_population": 420, "max_businesses_per_sector": 3 },
+    { "id": "quarry_town", "min_population": 950, "max_businesses_per_sector": 4 },
+    { "id": "saurian_city", "min_population": 2100, "max_businesses_per_sector": 5 },
+    { "id": "apex_vale", "min_population": 4800, "max_businesses_per_sector": 6 }
+  ],
+  "events": [
+    {
+      "id": "stampede",
+      "weight": 3,
+      "duration_steps": 2,
+      "effects": [{ "kind": "recipe_output_bps", "recipe": "egg_farm", "bps": 5000 }]
+    },
+    {
+      "id": "tar_seep",
+      "weight": 2,
+      "duration_steps": 1,
+      "effects": [{ "kind": "sink_inventory_bps", "sector": 3, "bps": 3000 }]
+    },
+    {
+      "id": "swamp_fever",
+      "weight": 2,
+      "duration_steps": 3,
+      "effects": [{ "kind": "population_bps", "bps": -500 }]
+    },
+    {
+      "id": "fossil_rush",
+      "weight": 3,
+      "duration_steps": 2,
+      "effects": [{ "kind": "recipe_output_bps", "recipe": "amber_dig", "bps": 16000 }]
+    }
+  ],
+  "genesis": {
+    "coin_per_business": 1500,
+    "coin_citizens": 10000,
+    "starting_businesses": {
+      "egg_farm": 1,
+      "grinding_stones": 1,
+      "pit_oven": 1,
+      "quarry": 1,
+      "amber_dig": 1,
+      "crystal_pit": 1,
+      "smelter": 1,
+      "bone_smith": 1,
+      "tar_still": 1,
+      "fishery": 1,
+      "rock_scribe": 1,
+      "fossil_carver": 1
+    }
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "id": "elf_grove",
+  "name": "Elf Grove",
+  "server": "tarn",
+  "version": 1,
+  "items": [
+    { "id": "grain", "base_price": 15, "tier": "staple" },
+    { "id": "flour", "base_price": 60, "tier": "staple" },
+    { "id": "bread", "base_price": 48, "tier": "staple" },
+    { "id": "fish", "base_price": 20, "tier": "staple" },
+    { "id": "ore", "base_price": 17, "tier": "raw" },
+    { "id": "crystal", "base_price": 15, "tier": "raw" },
+    { "id": "silverleaf", "base_price": 7, "tier": "raw" },
+    { "id": "ingot", "base_price": 70, "tier": "refined" },
+    { "id": "tool", "base_price": 132, "tier": "luxury" },
+    { "id": "elixir", "base_price": 32, "tier": "luxury" },
+    { "id": "scroll", "base_price": 25, "tier": "luxury" },
+    { "id": "stave", "base_price": 82, "tier": "luxury" }
+  ],
+  "sectors": [
+    { "idx": 0, "kind": "food", "name": "Sylvan Canopy" },
+    { "idx": 1, "kind": "ore", "name": "Deep Roots" },
+    { "idx": 2, "kind": "forge", "name": "Living-Wood Shapers" },
+    { "idx": 3, "kind": "alchemy", "name": "Moonwell Basin" },
+    { "idx": 4, "kind": "harbor", "name": "Lotus Marina" },
+    { "idx": 5, "kind": "tower", "name": "Star Towers" }
+  ],
+  "recipes": [
+    {
+      "id": "forager",
+      "sector": 0,
+      "inputs": {},
+      "outputs": { "grain": 2 },
+      "wage": 24,
+      "max_per_run_per_business": 35
+    },
+    {
+      "id": "wind_mill",
+      "sector": 0,
+      "inputs": { "grain": 2 },
+      "outputs": { "flour": 1 },
+      "wage": 18,
+      "max_per_run_per_business": 35
+    },
+    {
+      "id": "hearth_baker",
+      "sector": 0,
+      "inputs": { "flour": 1 },
+      "outputs": { "bread": 2 },
+      "wage": 16,
+      "max_per_run_per_business": 35
+    },
+    {
+      "id": "root_delver",
+      "sector": 1,
+      "inputs": {},
+      "outputs": { "ore": 2 },
+      "wage": 26,
+      "max_per_run_per_business": 25
+    },
+    {
+      "id": "moonwell",
+      "sector": 1,
+      "inputs": {},
+      "outputs": { "crystal": 2 },
+      "wage": 24,
+      "max_per_run_per_business": 35
+    },
+    {
+      "id": "herbalist",
+      "sector": 1,
+      "inputs": {},
+      "outputs": { "silverleaf": 3 },
+      "wage": 15,
+      "max_per_run_per_business": 30
+    },
+    {
+      "id": "wood_smelter",
+      "sector": 2,
+      "inputs": { "ore": 2 },
+      "outputs": { "ingot": 1 },
+      "wage": 22,
+      "max_per_run_per_business": 20
+    },
+    {
+      "id": "living_shaper",
+      "sector": 2,
+      "inputs": { "ingot": 1, "silverleaf": 1 },
+      "outputs": { "tool": 1 },
+      "wage": 28,
+      "max_per_run_per_business": 15
+    },
+    {
+      "id": "star_distiller",
+      "sector": 3,
+      "inputs": { "crystal": 1, "silverleaf": 1 },
+      "outputs": { "elixir": 2 },
+      "wage": 28,
+      "max_per_run_per_business": 25
+    },
+    {
+      "id": "lotus_fisher",
+      "sector": 4,
+      "inputs": {},
+      "outputs": { "fish": 1 },
+      "wage": 16,
+      "max_per_run_per_business": 30
+    },
+    {
+      "id": "celestial_scribe",
+      "sector": 5,
+      "inputs": { "crystal": 1 },
+      "outputs": { "scroll": 2 },
+      "wage": 24,
+      "max_per_run_per_business": 25
+    },
+    {
+      "id": "star_artisan",
+      "sector": 5,
+      "inputs": { "silverleaf": 2, "crystal": 1 },
+      "outputs": { "stave": 1 },
+      "wage": 36,
+      "max_per_run_per_business": 12
+    }
+  ],
+  "citizens": {
+    "start_population": 80,
+    "needs": [
+      { "item": "bread", "per_capita_milli": 950, "alt": ["fish"], "satisfaction_weight": 6000 },
+      { "item": "tool", "per_capita_milli": 15, "alt": [], "satisfaction_weight": 1000 },
+      { "item": "elixir", "per_capita_milli": 25, "alt": [], "satisfaction_weight": 1500 },
+      { "item": "stave", "per_capita_milli": 10, "alt": [], "satisfaction_weight": 1500 }
+    ]
+  },
+  "stages": [
+    { "id": "glade_camp", "min_population": 0, "max_businesses_per_sector": 2 },
+    { "id": "sylvan_haven", "min_population": 400, "max_businesses_per_sector": 3 },
+    { "id": "canopy_town", "min_population": 900, "max_businesses_per_sector": 4 },
+    { "id": "star_sanctuary", "min_population": 2000, "max_businesses_per_sector": 5 },
+    { "id": "high_grove", "min_population": 4500, "max_businesses_per_sector": 6 }
+  ],
+  "events": [
+    {
+      "id": "aurora_surge",
+      "weight": 3,
+      "duration_steps": 2,
+      "effects": [{ "kind": "recipe_output_bps", "recipe": "moonwell", "bps": 15000 }]
+    },
+    {
+      "id": "wither_blight",
+      "weight": 2,
+      "duration_steps": 2,
+      "effects": [{ "kind": "recipe_output_bps", "recipe": "forager", "bps": 5000 }]
+    },
+    {
+      "id": "starfall_fire",
+      "weight": 2,
+      "duration_steps": 1,
+      "effects": [{ "kind": "sink_inventory_bps", "sector": 5, "bps": 3000 }]
+    },
+    {
+      "id": "forest_plague",
+      "weight": 2,
+      "duration_steps": 3,
+      "effects": [{ "kind": "population_bps", "bps": -500 }]
+    }
+  ],
+  "genesis": {
+    "coin_per_business": 1500,
+    "coin_citizens": 10000,
+    "starting_businesses": {
+      "forager": 1,
+      "wind_mill": 1,
+      "hearth_baker": 1,
+      "root_delver": 1,
+      "moonwell": 1,
+      "herbalist": 1,
+      "wood_smelter": 1,
+      "living_shaper": 1,
+      "star_distiller": 1,
+      "lotus_fisher": 1,
+      "celestial_scribe": 1,
+      "star_artisan": 1
+    }
+  }
+}
