@@ -98,3 +98,26 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
   - Full keyboard parity via tab-navigable municipal district button list with 2px gold focus rings.
   - Interactive click-vs-drag protection: panning movements (>4px threshold) never inadvertently select buildings or sectors.
   - Hover and selection badge plates utilize opaque charred canvas backing (`#12100e`) ensuring AAA text contrast (15.3:1).
+
+---
+
+## 8. Audit Panel (Browser-Side Replay Verification)
+- **Visual Style & Philosophy**:
+  - Presented as the municipal notary and cartographic living ledger audit seal.
+  - Uses parchment tokens: charred canvas backing (`--atlas-surface`), hairline borders (`--atlas-line`), gold accents (`--atlas-gold`) for verified/active states, and ember/alert badges (`--atlas-alert`) for caught mismatches.
+- **Copy Standards**:
+  - Honest disclosure: *"Checkpoints here are built in your browser (mock mode, no chain). On a deployment the operator publishes them to NEAR and anyone can run this same check."*
+  - Rule hash transparency: *"rules hash (compare with the on-chain value in a real deployment)"*
+- **Accessibility & Interaction (WCAG 2.1 AA)**:
+  - Screen reader feedback: Results announce through an `aria-live="polite"` region with `role="status"` and `aria-atomic="true"`.
+  - Chunked execution: Audits execute asynchronously in small windows (`setTimeout` / event loop yield) so the main thread never freezes during deep replays.
+  - Progress indicator: Visual and screen-reader accessible progress bar (`role="progressbar"`) displaying completed vs total windows.
+  - Keyboard navigation: Full tab, enter, and space operable controls with 2px gold focus outlines (`atlas-focus`).
+  - Responsive down to 360px viewport: Hash strings use `break-all`, controls wrap gracefully, and horizontal checkpoint chains scroll smoothly without page blowout.
+- **Panel States**:
+  - *Empty State* (< 40 steps): Audit button disabled with explicit hint ("advance at least 40 steps"), guidance notice.
+  - *Ready State* (>= 40 steps): Audit button enabled, state root chain cards display window range and first 12 hex digits of the state root.
+  - *In-Progress State*: Animated spinner, progress bar active, inputs temporarily disabled.
+  - *Verified State*: High-contrast moss banner (`--atlas-moss`) affirming replayed consistency: `"VERIFIED: N checkpoints match the replay"`.
+  - *Mismatch / Tampered State*: Alert badge (`--atlas-alert`) displaying exact difference reason (e.g. `produced amount mismatch`, `new_state_root mismatch`, `stage mismatch`).
+

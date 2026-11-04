@@ -7,6 +7,7 @@ import { DistrictDetail } from "../components/DistrictDetail.tsx";
 import { MarketPanel } from "../components/MarketPanel.tsx";
 import { ChronicleList } from "../components/ChronicleList.tsx";
 import { SimulationControls } from "../components/SimulationControls.tsx";
+import { AuditPanel } from "../components/AuditPanel.tsx";
 
 const IsoCity = dynamic(
   () => import("../components/IsoCity.tsx").then((mod) => mod.IsoCity),
@@ -212,6 +213,14 @@ export default function CityViewPage() {
               selectedIdx={selectedIdx}
               onSelectSector={setSelectedIdx}
               seed={seed}
+            />
+
+            {/* Browser-side Replay Verification Audit Panel */}
+            <AuditPanel
+              arcId={arcId}
+              seed={seed}
+              cityId={world.state.city_id}
+              checkpoints={world.checkpoints}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

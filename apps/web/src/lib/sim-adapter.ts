@@ -9,14 +9,19 @@ import {
   parsePricingRules,
   parseGrowthRules,
   genesis,
-  runSteps,
+  step,
+  cityRoot,
+  eventRoot,
+  nextStateRoot,
   genesisPrevRoot,
+  buildCheckpoint,
 } from "../../../../packages/sim/src/index.ts";
 import type {
   ArcFile,
   CityState,
   SimEvent,
 } from "../../../../packages/sim/src/types.ts";
+import type { Checkpoint } from "../../../../packages/sim/src/checkpoint.ts";
 import type { PricingRules } from "../../../../packages/sim/src/pricing.ts";
 import type { GrowthRules } from "../../../../packages/sim/src/growth.ts";
 
@@ -43,6 +48,9 @@ export interface WorldInstance {
   events: SimEvent[];
   stateRoot: string;
   prevPrices?: Record<string, bigint>;
+  checkpoints: Checkpoint[];
+  windowStartState: CityState;
+  windowEvents: SimEvent[];
 }
 
 const PARSED_PRICING: PricingRules = parsePricingRules(pricingRulesJson);
@@ -111,6 +119,9 @@ export function createWorld(
     events: [],
     stateRoot,
     prevPrices: { ...state.market.price },
+    checkpoints: [],
+    windowStartState: state,
+    windowEvents: [],
   };
 }
 
@@ -123,28 +134,50 @@ export function advanceWorld(world: WorldInstance, steps: number): WorldInstance
 
   const prevPrices = { ...world.state.market.price };
   const growth = world.growth ?? getGrowthRules();
-  const ctx: { arc: ArcFile; pricing: PricingRules; growth: GrowthRules } = {
+  const ctx = {
     arc: world.arc,
     pricing: world.pricing,
     growth,
   };
 
-  // Run steps via sim runSteps engine
-  const res = runSteps(
-    world.state,
-    steps,
-    ctx,
-    world.stateRoot
-  );
+  let currState = world.state;
+  let currRoot = world.stateRoot;
+  let windowStart = world.windowStartState ?? world.state;
+  let windowEvents = [...(world.windowEvents ?? [])];
+  const checkpoints = [...(world.checkpoints ?? [])];
+  const stepRunEvents: SimEvent[] = [];
 
-  const finalRoot =
-    res.roots.length > 0 ? res.roots[res.roots.length - 1] : world.stateRoot;
+  for (let i = 0; i < steps; i++) {
+    const res = step(currState, ctx);
+    currState = res.state;
+    stepRunEvents.push(...res.events);
+    windowEvents.push(...res.events);
+
+    const eRoot = eventRoot(res.events);
+    const cRoot = cityRoot(currState);
+    currRoot = nextStateRoot(currRoot, currState.step, eRoot, cRoot);
+
+    if (currState.step % 40 === 0) {
+      const cp = buildCheckpoint({
+        prev: windowStart,
+        next: currState,
+        events: windowEvents,
+        stateRoot: currRoot,
+      });
+      checkpoints.push(cp);
+      windowStart = currState;
+      windowEvents = [];
+    }
+  }
 
   return {
     ...world,
-    state: res.state,
-    events: res.events,
-    stateRoot: finalRoot,
+    state: currState,
+    events: stepRunEvents,
+    stateRoot: currRoot,
     prevPrices,
+    checkpoints,
+    windowStartState: windowStart,
+    windowEvents,
   };
 }
