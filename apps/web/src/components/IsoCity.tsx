@@ -7,6 +7,7 @@ import { generateTerrain } from "../lib/iso/terrain.ts";
 import { layoutCity, type CityLayout } from "../lib/iso/layout.ts";
 import { IsoCityScene } from "../lib/iso/render.ts";
 import { calculateFitCamera } from "../lib/iso/iso-math.ts";
+import { bubblesFor } from "../lib/iso/bubbles.ts";
 
 export interface IsoCityProps {
   city: CityView;
@@ -186,9 +187,10 @@ export function IsoCity({
   // Rebuild scene when the world changes (new business, closure, stage, population) — app is kept.
   const firstBuildRef = useRef(true);
   const season = typeof city.step === "number" ? ((city.step % 4) + 4) % 4 : 0;
+  const bubbles = useMemo(() => bubblesFor(city), [city]);
   useEffect(() => {
     if (!ready || !sceneRef.current) return;
-    sceneRef.current.buildScene(terrain, layout, city.arc_id, selectedRef.current, !prefersReducedMotion(), season);
+    sceneRef.current.buildScene(terrain, layout, city.arc_id, selectedRef.current, !prefersReducedMotion(), season, bubbles);
     if (firstBuildRef.current) {
       firstBuildRef.current = false;
       recenter();
@@ -196,7 +198,7 @@ export function IsoCity({
       const { x, y, zoom } = camRef.current;
       sceneRef.current.setCamera(x, y, zoom);
     }
-  }, [ready, terrain, layout, city.arc_id, season, recenter]);
+  }, [ready, terrain, layout, city.arc_id, season, bubbles, recenter]);
 
   // Selection only redraws the highlight ring and label
   useEffect(() => {
@@ -288,6 +290,30 @@ export function IsoCity({
           <span className="text-[10px] text-atlas-ash px-1">
             {zoomLabel}%
           </span>
+        </div>
+      </div>
+
+      {/* Offscreen keyboard reachable list of active bubbles */}
+      <div
+        role="region"
+        aria-label="Active city notification bubbles"
+        className="sr-only focus-within:not-sr-only focus-within:relative focus-within:z-10 focus-within:block focus-within:bg-atlas-surface-raised focus-within:p-3 focus-within:rounded focus-within:border focus-within:border-atlas-gold focus-within:space-y-2"
+      >
+        <h4 className="text-xs font-mono uppercase text-atlas-gold font-semibold">
+          Active Bubbles & Alerts (Select to inspect district)
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {bubbles.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => onSelectSector(b.sectorIdx)}
+              aria-label={b.ariaLabel}
+              className="atlas-focus text-xs font-mono px-2.5 py-1 rounded bg-atlas-surface border border-atlas-line hover:border-atlas-gold text-atlas-ink hover:text-atlas-gold transition-colors"
+            >
+              [{b.glyph.toUpperCase()}] {b.title}
+            </button>
+          ))}
         </div>
       </div>
 

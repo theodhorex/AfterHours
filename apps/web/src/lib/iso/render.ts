@@ -14,7 +14,8 @@ import { IsoTextureManager } from "./sprites.ts";
 import { IsoAnimationManager, generateActors } from "./animation.ts";
 import { IsoWeatherManager } from "./weather.ts";
 import { getTheme, type ThemeTokens } from "./theme.ts";
-import { drawDistrictHighlights, makeBuildingBadge } from "./render-ui.ts";
+import { drawDistrictHighlights, makeBuildingBadge, BubblePoolManager } from "./render-ui.ts";
+import type { Bubble } from "./bubbles.ts";
 import type { TerrainMap } from "./terrain.ts";
 import type { CityLayout, BuildingLayout } from "./layout.ts";
 
@@ -32,6 +33,7 @@ export class IsoCityScene {
   private actorsLayer = new Container();
   private effectsLayer = new Container();
   private weatherManager = new IsoWeatherManager();
+  private bubbleManager: BubblePoolManager;
   private uiLayer = new Container();
 
   private textureManager: IsoTextureManager;
@@ -51,6 +53,7 @@ export class IsoCityScene {
   constructor(private app: Application, callbacks: IsoSceneCallbacks = {}) {
     this.callbacks = callbacks;
     this.textureManager = new IsoTextureManager(app.renderer);
+    this.bubbleManager = new BubblePoolManager(app.renderer, this.callbacks);
     this.root.addChild(
       this.groundLayer,
       this.roadLayer,
@@ -58,6 +61,7 @@ export class IsoCityScene {
       this.entitiesLayer,
       this.actorsLayer,
       this.effectsLayer,
+      this.bubbleManager.layer,
       this.weatherManager.layer,
       this.uiLayer
     );
@@ -79,7 +83,8 @@ export class IsoCityScene {
     arcId: string,
     selectedIdx: number,
     allowMotion: boolean,
-    season = 0
+    season = 0,
+    bubbles: Bubble[] = []
   ): void {
     // If only season changed on the exact same layout and arc, swap tints and weather smoothly
     if (
@@ -88,7 +93,7 @@ export class IsoCityScene {
       this.currentArcId === arcId &&
       this.currentSeason !== season
     ) {
-      this.setSeason(season, allowMotion);
+      this.setSeason(season, allowMotion, bubbles);
       this.updateSelection(selectedIdx);
       return;
     }
@@ -313,6 +318,9 @@ export class IsoCityScene {
     // 7. Update Selection ring and badge
     this.updateSelection();
 
+    // 7b. Update pooled speech bubbles
+    this.bubbleManager.update(bubbles, layout);
+
     // 8. Manage ticker
     if (this.allowMotion && !this.tickerRunning) {
       this.app.ticker.add(this.onTick);
@@ -323,13 +331,16 @@ export class IsoCityScene {
     }
   }
 
-  public setSeason(season: number, allowMotion = this.allowMotion): void {
+  public setSeason(season: number, allowMotion = this.allowMotion, bubbles?: Bubble[]): void {
     this.currentSeason = season;
     if (!this.currentArcId) return;
     const theme = getTheme(this.currentArcId, season);
     this.currentTheme = theme;
     this.root.tint = theme.ambientTint;
     this.weatherManager.setWeather(theme.weather, theme, allowMotion);
+    if (bubbles && this.currentLayout) {
+      this.bubbleManager.update(bubbles, this.currentLayout);
+    }
   }
 
   public updateSelection(newIdx?: number): void {
@@ -367,6 +378,7 @@ export class IsoCityScene {
     if (this.allowMotion) {
       this.animManager.update();
       this.weatherManager.update();
+      this.bubbleManager.tick(this.allowMotion);
     }
   };
 
@@ -380,6 +392,7 @@ export class IsoCityScene {
     for (const child of this.uiLayer.removeChildren()) child.destroy({ children: true });
     this.hoverBadge = null;
     this.selBadge = null;
+    this.bubbleManager.clear();
     this.animManager.clear();
     this.weatherManager.clear();
   }
@@ -390,6 +403,7 @@ export class IsoCityScene {
       this.tickerRunning = false;
     }
     this.clearScene();
+    this.bubbleManager.destroy();
     this.animManager.destroy();
     this.weatherManager.destroy();
     this.textureManager.destroy();

@@ -144,22 +144,22 @@ const ARC_CONFIGS: Record<string, ArcBaseConfig> = {
   cave_hold: {
     roadStyle: "mine_rails",
     treeStyle: "crystal",
-    props: ["crystals", "mine_rails", "forge_sparks", "ore_mounds", "lava_pots"],
+    props: ["ore_carts", "mine_entrances", "crystals", "mine_rails", "forge_sparks"],
     basePrimary: 0x475b70, // Slate-blue masonry
     baseSecondary: 0x334455,
     baseTrim: 0x212d38,
     baseAccent: 0xf97316, // Lava orange
-    baseGrass: 0xb49a7e, // Warm cavern gravel & stone dust
+    baseGrass: 0xb8a28c, // Warm cavern gravel & stone dust
     baseRock: 0x889eb2, // Slate-blue bedrock
     baseWater: 0x38a0d0, // Bright underground river
     baseSand: 0xc8b296,
     baseSmoke: 0xfb923c, // Ember-tinted smoke
-    windowLit: 0xfbbf24,
+    windowLit: 0xfbbf24, // Warm lamp-lit forge windows
   },
   dino_vale: {
     roadStyle: "dirt",
     treeStyle: "fern",
-    props: ["bones", "eggs", "footprints", "cycad_ferns", "amber_shards"],
+    props: ["giant_ferns", "bone_fences", "eggs", "nests", "amber_shards"],
     basePrimary: 0x6b5c47, // Primitive thatch & heavy timber
     baseSecondary: 0x4d4130,
     baseTrim: 0x2e251a,
@@ -167,31 +167,31 @@ const ARC_CONFIGS: Record<string, ArcBaseConfig> = {
     baseGrass: 0x68ac48, // Lush fern green
     baseRock: 0x9c9480, // Prehistoric limestone
     baseWater: 0x2ea898, // Rich jungle water
-    baseSand: 0xd4c28c, // Sunlit sand
+    baseSand: 0xd4c28c, // Sunlit ochre sand
     baseSmoke: 0xc8b49e,
     windowLit: 0xf59e0b,
   },
   elf_grove: {
     roadStyle: "root_path",
     treeStyle: "great_tree",
-    props: ["big_trees", "root_bridges", "fireflies", "violet_flowers", "runic_stones"],
-    basePrimary: 0x44634f, // Living bark & arched boughs
-    baseSecondary: 0x2f4637,
-    baseTrim: 0x1e3025,
-    baseAccent: 0xc084fc, // Violet flowers & arcane gold
+    props: ["great_trees", "big_trees", "houses_in_trunks", "leaf_huts", "flower_beds", "rope_bridges"],
+    basePrimary: 0x3e5844, // Living bark & arched boughs
+    baseSecondary: 0x2a3e30,
+    baseTrim: 0x1a281e,
+    baseAccent: 0xf472b6, // Cherry-blossom pink in spring, gold in autumn
     baseGrass: 0x48a855, // Emerald moss
     baseRock: 0x98a8a0, // Silver quartz
     baseWater: 0x3eaed4, // Moon-blue clear water
     baseSand: 0xb8c8b4,
     baseSmoke: 0xa8c4ba,
-    windowLit: 0xfbbf24,
+    windowLit: 0xfef08a,
   },
 };
 
 const WEATHER_BY_ARC_SEASON: Record<string, WeatherType[]> = {
   goblin_warrens: ["fog", "fireflies", "falling_leaves", "snow"],
-  cave_hold: ["dust", "embers", "fog", "embers"],
-  dino_vale: ["rain", "dust", "falling_leaves", "rain"],
+  cave_hold: ["dust", "embers", "fog", "snow"],
+  dino_vale: ["rain", "dust", "falling_leaves", "none"],
   elf_grove: ["fireflies", "fireflies", "falling_leaves", "snow"],
 };
 
@@ -219,40 +219,91 @@ export function getTheme(arcId: string, seasonInput: number | string): ThemeToke
   let rock = arc.baseRock;
   let sand = arc.baseSand;
   let ambientTint = 0xfffef6; // Pure bright daytime spring tint
+  let accent = arc.baseAccent;
+
+  if (arcId === "elf_grove") {
+    if (seasonIdx === 0) accent = 0xf472b6; // Cherry-blossom pink in spring
+    else if (seasonIdx === 2) accent = 0xeab308; // Gold in autumn
+    else if (seasonIdx === 1) accent = 0xc084fc; // Violet blossoms
+    else accent = 0xc4b5fd; // Frost starlight
+  }
 
   if (isSummer) {
-    grass = shade(arc.baseGrass, 1.08);
-    forest = shade(arc.baseGrass, 0.95);
-    water = shade(arc.baseWater, 1.05);
-    rock = shade(arc.baseRock, 1.05);
-    sand = shade(arc.baseSand, 1.05);
-    ambientTint = 0xfffaea; // Bright sunny daylight
-  } else if (isAutumn) {
-    // Autumn shift: bright amber/rust/orange
-    grass = 0xb8883e; // Bright autumn golden rust (luminance > 0.28)
-    forest = 0x9a5828;
-    rock = shade(arc.baseRock, 1.0);
-    sand = shade(arc.baseSand, 1.05);
-    ambientTint = 0xfff4e6; // Warm golden autumn daylight
-  } else if (isWinter) {
-    // Winter shift: crisp snow, frost ground, frozen water
-    ambientTint = 0xf4f8fc; // Crisp cool bright winter daylight
     if (arcId === "cave_hold") {
-      grass = shade(arc.baseGrass, 1.0);
-      rock = 0xa0a8b0;
-      water = arc.baseWater;
+      grass = 0xc4b29c;
+      rock = 0x94aabf;
+      water = 0x48aee0;
+      ambientTint = 0xfff8ea;
+    } else if (arcId === "dino_vale") {
+      grass = 0x78b84e;
+      sand = 0xdcc890;
+      water = 0x32b4a4;
+      ambientTint = 0xfffae4; // Mist-free bright sunny sky
+    } else if (arcId === "elf_grove") {
+      grass = 0x429e50;
+      rock = 0xa4b8b0;
+      water = 0x44b8dc;
+      ambientTint = 0xfffef0;
     } else {
-      grass = 0x9ca89e; // Frost-dusted bright ground (luminance > 0.35)
+      grass = shade(arc.baseGrass, 1.08);
+      forest = shade(arc.baseGrass, 0.95);
+      water = shade(arc.baseWater, 1.05);
+      rock = shade(arc.baseRock, 1.05);
+      sand = shade(arc.baseSand, 1.05);
+      ambientTint = 0xfffaea;
+    }
+  } else if (isAutumn) {
+    if (arcId === "cave_hold") {
+      grass = 0xb48b62; // Copper rust stone gravel
+      rock = 0x8092a4;
+      water = 0x3296c4;
+      ambientTint = 0xfff2e0;
+    } else if (arcId === "dino_vale") {
+      grass = 0xb29a44; // Golden ochre savannah
+      sand = 0xd0b880;
+      water = 0x2ca090;
+      ambientTint = 0xfff5e0;
+    } else if (arcId === "elf_grove") {
+      grass = 0x8ca838; // Golden moss
+      rock = 0x9a9e88;
+      water = 0x3aa4c8;
+      ambientTint = 0xfff6e2; // Golden autumn light
+    } else {
+      grass = 0xb8883e;
+      forest = 0x9a5828;
+      ambientTint = 0xfff4e6;
+    }
+  } else if (isWinter) {
+    if (arcId === "cave_hold") {
+      grass = 0xbfc9d4; // Frost-dusted gravel
+      rock = 0xc8d8e6; // Snow-capped peaks!
+      water = 0x82b4cc;
+      ambientTint = 0xf4f8fc;
+    } else if (arcId === "dino_vale") {
+      grass = 0x929e68; // Dry savannah
+      rock = 0x989078;
+      sand = 0xc8b47e;
+      water = 0x309c96;
+      ambientTint = 0xfff8ee; // Mist-free bright sky
+    } else if (arcId === "elf_grove") {
+      grass = 0x8ca89a; // Frost-dusted emerald moss
+      rock = 0xb8c8c4;
+      water = 0x8ec4dc;
+      ambientTint = 0xf4f8fc;
+    } else {
+      grass = 0x9ca89e;
       forest = 0x7a8880;
-      water = 0x8ec0d8; // Frozen pale water
+      water = 0x8ec0d8;
       rock = 0xa0a8b0;
-      sand = shade(arc.baseSand, 1.08);
+      ambientTint = 0xf4f8fc;
     }
   }
 
   const grassDark = shade(grass, 0.72);
   const waterDeep = shade(water, 0.72);
-  const waterFoam = isWinter && arcId !== "cave_hold" ? 0xd0e8f2 : shade(water, 1.4);
+  const isFrozenWater = isWinter && arcId !== "dino_vale";
+  const hasSnowCaps = isWinter && arcId !== "dino_vale";
+  const waterFoam = isFrozenWater ? 0xd0e8f2 : shade(water, 1.4);
   const roadCurb = outlineColor(arc.basePrimary);
   const road = shade(arc.basePrimary, 1.25);
   const bridge = shade(arc.basePrimary, 1.1);
@@ -270,7 +321,7 @@ export function getTheme(arcId: string, seasonInput: number | string): ThemeToke
     road,
     roadCurb,
     bridge,
-    accent: arc.baseAccent,
+    accent,
   };
 
   const building: BuildingColors = {
@@ -278,7 +329,7 @@ export function getTheme(arcId: string, seasonInput: number | string): ThemeToke
     wallDark: arc.baseSecondary,
     roof: arc.baseSecondary,
     roofDark: arc.baseTrim,
-    accent: arc.baseAccent,
+    accent,
     trim: arc.baseTrim,
     windowLit: arc.windowLit,
     windowDark: 0x1c1712,
@@ -290,8 +341,6 @@ export function getTheme(arcId: string, seasonInput: number | string): ThemeToke
 
   const windowGlowLevel = isWinter ? 0.35 : isAutumn ? 0.3 : isSummer ? 0.18 : 0.22;
   const smokeThickness = isWinter ? 2.0 : isAutumn ? 1.2 : isSummer ? 0.8 : 1.0;
-  const isFrozenWater = isWinter && arcId !== "cave_hold";
-  const hasSnowCaps = isWinter && arcId !== "cave_hold";
 
   return {
     arcId,

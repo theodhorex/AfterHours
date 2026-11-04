@@ -611,5 +611,34 @@ describe("Isometric City Logic", () => {
         }
       }
     });
+
+    it("cave_hold features grey-blue stone, warm windows, and snow-capped peaks in winter", () => {
+      const chSpring = getTheme("cave_hold", 0);
+      const chWinter = getTheme("cave_hold", 3);
+      assert.equal(chSpring.roadStyle, "mine_rails");
+      assert.equal(chSpring.treeStyle, "crystal");
+      assert.ok(chSpring.props.includes("mine_rails") || chSpring.props.includes("ore_mounds"));
+      assert.ok(chWinter.hasSnowCaps, "cave_hold must have snow caps on peaks in winter");
+      assert.notEqual(chSpring.ground.grass, chWinter.ground.grass);
+      assert.ok(relativeLuminance(chSpring.building.windowLit) > 0.5, "warm lamp-lit forge windows");
+    });
+
+    it("dino_vale features lush green and ochre, ferns, and mist-free bright sky", () => {
+      const dvSpring = getTheme("dino_vale", 0);
+      const dvAutumn = getTheme("dino_vale", 2);
+      assert.equal(dvSpring.treeStyle, "fern");
+      assert.ok(dvSpring.props.includes("eggs") || dvSpring.props.includes("bones"));
+      assert.notEqual(dvSpring.ground.grass, dvAutumn.ground.grass, "distinct palettes per season for dino_vale");
+      assert.ok(relativeLuminance(dvSpring.ambientTint) > 0.85, "mist-free bright sky");
+    });
+
+    it("elf_grove features great trees, root bridges, spring blossoms, and autumn gold", () => {
+      const egSpring = getTheme("elf_grove", 0);
+      const egAutumn = getTheme("elf_grove", 2);
+      assert.equal(egSpring.treeStyle, "great_tree");
+      assert.ok(egSpring.props.includes("big_trees") || egSpring.props.includes("root_bridges"));
+      assert.notEqual(egSpring.ground.grass, egAutumn.ground.grass, "distinct seasonal palettes for elf_grove");
+      assert.ok(egSpring.accent !== undefined);
+    });
   });
 });

@@ -59,9 +59,17 @@ export function drawTreeGraphics(
     g.poly([0, -14, 0, -26]).stroke({ color: fCol, width: 2.2 });
     g.circle(0, -14, 3).fill({ color: fCol });
   } else if (treeStyle === "great_tree") {
-    // Elf Grove: Ancient broad canopy tree
-    g.rect(-3, -18, 6, 18).fill({ color: 0x2b382d }).stroke({ color: 0x141c15, width: 1 });
-    const leafCol = hasSnow ? 0xf0f8ff : theme.seasonName === "autumn" ? 0xd97706 : pal.forest;
+    // Elf Grove: Ancient broad canopy tree with houses in trunks
+    g.rect(-4, -18, 8, 18).fill({ color: 0x243326 }).stroke({ color: 0x101a12, width: 1 });
+    g.rect(-1.5, -6, 3, 5).fill({ color: 0x152217 });
+    g.circle(0, -11, 1.5).fill({ color: 0xfef08a }); // Lit window in trunk
+
+    let leafCol = pal.forest;
+    if (hasSnow) leafCol = 0xf0f8ff;
+    else if (theme.seasonName === "spring") leafCol = 0xf472b6; // Cherry blossom pink
+    else if (theme.seasonName === "autumn") leafCol = 0xeab308; // Gold in autumn
+    else if (theme.seasonName === "summer") leafCol = 0x38a050;
+
     g.circle(0, -22, 13).fill({ color: leafCol }).stroke({ color: outlineColor(leafCol), width: 1 });
     g.circle(-6, -26, 9).fill({ color: shade(leafCol, 1.2) });
     g.circle(6, -24, 8).fill({ color: shade(leafCol, 0.85) });
@@ -134,12 +142,39 @@ export function drawRuralFeatureGraphics(
   if (kind === "farmland") {
     g.poly([-14, 0, 0, 7, 14, 0, 0, -7]).fill({ color: 0x3a2c1a }).stroke({ color: 0x1a1309, width: 1 });
     g.poly([-10, 1, 0, 5, 10, 1]).stroke({ color: pal.grass, width: 1.5 });
+  } else if (kind === "bone_fences" || kind === "fence") {
+    // Dino Vale: Bone fence
+    g.poly([-12, 1, 12, -5]).stroke({ color: 0xf3f4f6, width: 2 });
+    g.rect(-10, -8, 2, 9).fill({ color: 0xe5e7eb });
+    g.rect(8, -8, 2, 9).fill({ color: 0xe5e7eb });
+  } else if (kind === "eggs" || kind === "nests") {
+    // Dino Vale: Dinosaur eggs in straw nest
+    g.ellipse(0, 0, 9, 5).fill({ color: 0x5c4224 });
+    g.ellipse(-3, -2, 2.5, 3.5).fill({ color: 0xfef9c3 }).stroke({ color: 0xca8a04, width: 0.5 });
+    g.ellipse(3, -2, 2.5, 3.5).fill({ color: 0xfef9c3 }).stroke({ color: 0xca8a04, width: 0.5 });
+  } else if (kind === "ore_carts") {
+    // Cave Hold: Ore cart
+    drawDropShadow(g, 8, 4, 0.35);
+    g.rect(-6, -7, 12, 5).fill({ color: 0x334455 }).stroke({ color: 0x1e293b, width: 1 });
+    g.circle(-4, -2, 2).fill({ color: 0x0f172a });
+    g.circle(4, -2, 2).fill({ color: 0x0f172a });
+    g.circle(0, -8, 2.5).fill({ color: 0x38bdf8 });
+  } else if (kind === "mine_entrances") {
+    // Cave Hold: Mine entrance
+    g.poly([-12, 0, 0, 6, 12, 0, 0, -6]).fill({ color: 0x1e293b });
+    g.poly([-10, 0, 0, -18, 10, 0]).stroke({ color: 0x5a4225, width: 3 });
+  } else if (kind === "rope_bridges") {
+    // Elf Grove: Rope bridge
+    g.poly([-14, -2, 0, 4, 14, -2]).stroke({ color: 0x92400e, width: 1.5 });
+    g.poly([-14, -8, 0, -3, 14, -8]).stroke({ color: 0xb45309, width: 1.5 });
+  } else if (kind === "flower_beds") {
+    // Elf Grove: Glowing subtle flower beds
+    g.ellipse(0, 0, 8, 4).fill({ color: 0x1b4332 });
+    g.circle(-3, -2, 1.5).fill({ color: 0xf472b6 });
+    g.circle(3, -2, 1.5).fill({ color: 0x38bdf8 });
   } else if (kind === "orchard") {
     drawTreeGraphics(g, 1, pal);
     g.circle(-3, -22, 1.5).fill({ color: 0xd94f38 });
-  } else if (kind === "fence") {
-    g.poly([-12, 2, 12, -4]).stroke({ color: 0x4a3724, width: 2 });
-    g.rect(-10, -7, 2, 8).fill({ color: 0x2b1e12 });
   } else if (kind === "well") {
     drawDropShadow(g, 8, 4, 0.35);
     g.ellipse(0, 0, 7, 3.5).fill({ color: 0x3d3830 }).stroke({ color: 0x1c1a16, width: 1 });
