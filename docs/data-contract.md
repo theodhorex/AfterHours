@@ -98,3 +98,14 @@ Checkpoint {
 
 ## 12. Agent rules (packages/rules) used by the sim
 `{ id, when: [cond<=3], do: action, cooldown }`. Conditions: `price(item) op v`, `stock(item) op v`, `season_in([0..3])`, `coin op v`. Actions: `buy(item, qty, max_price)`, `sell(item, qty, min_price)`, `produce(recipe, qty)`. Limits: <=8 rules per agent, qty <= business cap, <=K orders per step, fixed fee per fired rule (to treasury), no loops. Evaluated in listed order. Exact JSON schema is written by task A4.
+
+## Inter-city caravans
+
+Inter-city caravan trade allows cities with different arcs to trade goods without smart contract modifications (`packages/sim/src/caravan.ts`).
+
+- **Planning**: `planCaravan(a, b, ctxA, ctxB, item, maxQty)` determines trade feasibility. Unit price is the integer midpoint of both cities' current market price: `(priceA + priceB) / 2n`. A plan is rejected (`null`) if the item is unpriced, price spread is non-positive (`priceB <= priceA`), seller has no surplus, or buyer cannot afford 1 unit. Trade quantity is bounded by `maxQty`, seller inventory surplus, buyer coin, and both cities' `arcCaps` (`source_cap_per_step`/`sink_cap_per_step` and coin caps).
+- **Settlement & Flows**: `applyCaravan(a, b, plan, item)` returns new immutable states and flow records:
+  - Seller City A: inventory is deducted deterministically from businesses in sorted business-id order and recorded in `flowsA.items[item].sunk`. City A receives payment into treasury recorded as `flowsA.coin.sourced`.
+  - Buyer City B: inventory is deposited into sector 0's first business and recorded in `flowsB.items[item].sourced`. City B pays from treasury (falling back to citizens purse) recorded as `flowsB.coin.sunk`.
+- **Conservation**: Per-city conservation is verified by `checkConservation` from `checkpoint.ts`. Globally, `sum(items)` and `sum(coin)` over both cities are strictly invariant, non-negative, and deterministic.
+

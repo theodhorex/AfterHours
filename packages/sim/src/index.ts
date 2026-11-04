@@ -13,3 +13,4 @@ export * from "./checkpoint.ts";
 export * from "./orders.ts";
 export * from "./valuation.ts";
 export * from "./fork.ts";
+export * from "./caravan.ts";
