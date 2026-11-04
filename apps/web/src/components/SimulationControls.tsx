@@ -9,6 +9,7 @@ import {
   canUse,
   buyTicket,
   getActiveSpeed,
+  DEFAULT_WALLET_BALANCE,
   loadWalletFromStorage,
   saveWalletToStorage,
   clampWalletBalance,
@@ -56,9 +57,18 @@ export function SimulationControls({
   onChangeTimelapseRate,
 }: SimulationControlsProps) {
   const [internalSpeed, setInternalSpeed] = useState<SpeedTier>(OFFICIAL_TIER);
-  const [wallet, setWallet] = useState<SpeedWallet>(loadWalletFromStorage);
+  const [wallet, setWallet] = useState<SpeedWallet>({
+    bread: DEFAULT_WALLET_BALANCE,
+    activeTicket: null,
+    sinkLog: [],
+  });
+  // Load the saved wallet only after hydration so server and client render the same markup.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe load of a browser-only store
+    setWallet(loadWalletFromStorage());
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
-  const [now, setNow] = useState<number>(() => Date.now());
+  const [now, setNow] = useState<number>(0);
 
   const currentSpeed = propSpeedTier ?? internalSpeed;
 
