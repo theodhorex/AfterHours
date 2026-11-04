@@ -1,0 +1,144 @@
+[
+  {
+    "name": "simple_string",
+    "type": "leaf",
+    "input": "hello world",
+    "canonical": "\"hello world\"",
+    "hash": "9ddefe4435b21d901439e546d54a14a175a3493b9fd8fbf38d9ea6d3cbf70826"
+  },
+  {
+    "name": "unicode_string",
+    "type": "leaf",
+    "input": "AfterHours ⚔️ 🏰 룬",
+    "canonical": "\"AfterHours ⚔️ 🏰 룬\"",
+    "hash": "e32f56f8eb66a54e1eabb330b62ed9b09669f2450889caa974bb1e51dcbf48f2"
+  },
+  {
+    "name": "null_value",
+    "type": "leaf",
+    "input": null,
+    "canonical": "null",
+    "hash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+  },
+  {
+    "name": "boolean_true",
+    "type": "leaf",
+    "input": true,
+    "canonical": "true",
+    "hash": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+  },
+  {
+    "name": "empty_object",
+    "type": "leaf",
+    "input": {},
+    "canonical": "{}",
+    "hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+    "name": "object_bigint_strings",
+    "type": "leaf",
+    "input": {
+      "coin": "1200",
+      "step": "0"
+    },
+    "canonical": "{\"coin\":\"1200\",\"step\":\"0\"}",
+    "hash": "45f4a5315366f9f7435f8e99e62e94d875dce579fb4c669b9a48095a315c4817"
+  },
+  {
+    "name": "unsorted_keys_object",
+    "type": "leaf",
+    "input": {
+      "z": "last",
+      "a": "1",
+      "m": "middle",
+      "b": null
+    },
+    "canonical": "{\"a\":\"1\",\"b\":null,\"m\":\"middle\",\"z\":\"last\"}",
+    "hash": "b14fdf391d55555b6593f955b7b62d5f9d41936f09c0d107e463ec74f2bdad7f"
+  },
+  {
+    "name": "empty_array",
+    "type": "leaf",
+    "input": [],
+    "canonical": "[]",
+    "hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "array_preserved_order",
+    "type": "leaf",
+    "input": [
+      "1",
+      "2",
+      "3",
+      "test",
+      null,
+      false
+    ],
+    "canonical": "[\"1\",\"2\",\"3\",\"test\",null,false]",
+    "hash": "13a2f730f16a834eea569ceb5dac2eae8edfb0a00c77cafd66b97174a3218069"
+  },
+  {
+    "name": "nested_object_with_array",
+    "type": "leaf",
+    "input": {
+      "citizens": {
+        "population": "220",
+        "purse": "2200"
+      },
+      "tags": [
+        "camp",
+        "hold"
+      ]
+    },
+    "canonical": "{\"citizens\":{\"population\":\"220\",\"purse\":\"2200\"},\"tags\":[\"camp\",\"hold\"]}",
+    "hash": "5f29f2af8c7e9a447f52b33f1621352ad5d170d8db288baf9bf45743f1be4318"
+  },
+  {
+    "name": "city_state_slice",
+    "type": "leaf",
+    "input": {
+      "city_id": "cave_hold",
+      "stage": "0",
+      "treasury": "5000",
+      "sectors": [
+        {
+          "idx": "0",
+          "kind": "food"
+        },
+        {
+          "idx": "1",
+          "kind": "ore"
+        }
+      ]
+    },
+    "canonical": "{\"city_id\":\"cave_hold\",\"sectors\":[{\"idx\":\"0\",\"kind\":\"food\"},{\"idx\":\"1\",\"kind\":\"ore\"}],\"stage\":\"0\",\"treasury\":\"5000\"}",
+    "hash": "33fa6e6c549aaa80a259f2046d01694a048ee5b914d7a3c0fcb6b26c8545ea9c"
+  },
+  {
+    "name": "node_1_leaf",
+    "type": "node",
+    "input_hashes": [
+      "45f4a5315366f9f7435f8e99e62e94d875dce579fb4c669b9a48095a315c4817"
+    ],
+    "hash": "f11447b42c885a5e1e0b1b0403ba7485dac7c07bbd252021a31f8aa290bc821f"
+  },
+  {
+    "name": "node_2_leaves",
+    "type": "node",
+    "input_hashes": [
+      "45f4a5315366f9f7435f8e99e62e94d875dce579fb4c669b9a48095a315c4817",
+      "b14fdf391d55555b6593f955b7b62d5f9d41936f09c0d107e463ec74f2bdad7f"
+    ],
+    "hash": "9cf072a3db91e0bc58e45ab2a45ab02c29f3a5ec286b327745f12eeef063ff10"
+  },
+  {
+    "name": "node_3_leaves",
+    "type": "node",
+    "input_hashes": [
+      "9ddefe4435b21d901439e546d54a14a175a3493b9fd8fbf38d9ea6d3cbf70826",
+      "e32f56f8eb66a54e1eabb330b62ed9b09669f2450889caa974bb1e51dcbf48f2",
+      "5f29f2af8c7e9a447f52b33f1621352ad5d170d8db288baf9bf45743f1be4318"
+    ],
+    "hash": "2484655a69370436a0802bc531d13b9837d35c86105e2773ac35a37ffd9f437b"
+  }
+]
