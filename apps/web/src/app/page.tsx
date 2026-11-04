@@ -10,6 +10,7 @@ import { SimulationControls } from "../components/SimulationControls.tsx";
 import { AuditPanel } from "../components/AuditPanel.tsx";
 import { CaravanPanel } from "../components/CaravanPanel.tsx";
 import { AgentsPanel } from "../components/AgentsPanel.tsx";
+import { MayorCard } from "../components/MayorCard.tsx";
 
 const IsoCity = dynamic(
   () => import("../components/IsoCity.tsx").then((mod) => mod.IsoCity),
@@ -237,8 +238,9 @@ export default function CityViewPage() {
                 {selectedSector && <DistrictDetail sector={selectedSector} />}
               </div>
 
-              {/* Right Column: Market Panel & Chronicle List */}
+              {/* Right Column: Meme Mayor, Market Panel & Chronicle List */}
               <div className="lg:col-span-5 space-y-6">
+                <MayorCard arcId={arcId} cityYear={cityView.year} />
                 <MarketPanel items={cityView.market} />
                 <ChronicleList events={cityView.chronicle} />
               </div>
