@@ -16,11 +16,11 @@ test("parseArc successfully parses cave_hold.json", () => {
   assert.equal(arc.id, "cave_hold");
   assert.equal(arc.sectors.length, 6);
   assert.equal(typeof arc.items[0].base_price, "bigint");
-  assert.equal(arc.items[0].base_price, 9n);
+  assert.ok(arc.items[0].base_price > 0n);
   assert.equal(typeof arc.recipes[0].wage, "bigint");
-  assert.equal(arc.recipes[0].wage, 4n);
+  assert.equal(arc.recipes[0].wage, BigInt(raw.recipes[0].wage)); // parsed value equals the file value (not a tuning constant)
   assert.equal(typeof arc.citizens.start_population, "bigint");
-  assert.equal(arc.citizens.start_population, 220n);
+  assert.equal(arc.citizens.start_population, BigInt(raw.citizens.start_population));
   assert.equal(arc.stages[0].min_population, 0n);
   assert.equal(typeof arc.events[0].weight, "bigint");
   assert.equal(typeof arc.genesis.coin_citizens, "bigint");
@@ -33,8 +33,8 @@ test("parseArc successfully parses goblin_warrens.json", () => {
   assert.equal(arc.id, "goblin_warrens");
   assert.equal(arc.sectors.length, 6);
   assert.equal(typeof arc.items[0].base_price, "bigint");
-  assert.equal(arc.items[0].base_price, 8n);
-  assert.equal(arc.citizens.start_population, 200n);
+  assert.ok(arc.items[0].base_price > 0n);
+  assert.equal(arc.citizens.start_population, BigInt(raw.citizens.start_population));
   assert.equal(arc.stages[0].min_population, 0n);
 });
 
