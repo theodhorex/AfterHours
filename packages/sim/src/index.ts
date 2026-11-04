@@ -9,3 +9,4 @@ export * from "./pricing.ts";
 export * from "./growth.ts";
 export * from "./step.ts";
 export * from "./run.ts";
+export * from "./checkpoint.ts";

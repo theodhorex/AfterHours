@@ -46,41 +46,7 @@ export interface CityState {
   };
 }
 
-// --- Data Contract Section 10: Checkpoints ---
-
-export interface CheckpointItemDelta {
-  produced: bigint;
-  consumed_recipe: bigint;
-  consumed_pop: bigint;
-  sourced: bigint;
-  sunk: bigint;
-  trade_net: bigint;
-}
-
-export interface CheckpointCoinDelta {
-  sourced: bigint;
-  sunk: bigint;
-  trade_net: bigint;
-}
-
-export interface PlayerDelta {
-  account: string;
-  item: string;
-  delta: bigint;
-}
-
-export interface Checkpoint {
-  city_id: string;
-  from_step: number;
-  to_step: number;
-  new_state_root: string;
-  new_city_root: string;
-  stage: number;
-  items: Record<string, CheckpointItemDelta>;
-  coin: CheckpointCoinDelta;
-  player_deltas: PlayerDelta[];
-  executed_order_ids: string[];
-}
+// Checkpoint types live in checkpoint.ts (they mirror the Rust contract structs).
 
 // --- Data Contract Section 11: Events ---
 
