@@ -11,8 +11,8 @@
   "shrink_bps": 300,
   "min_population": 10,
   "stage_min_satisfaction_bps": 6000,
-  "dividend_bps": 1000,
-  "dividend_reserve_bps": 20000,
+  "dividend_bps": 5000,
+  "dividend_reserve_bps": 10000,
   "topup_floor_bps": 5000,
   "stock_cap_runs": 4
 }
