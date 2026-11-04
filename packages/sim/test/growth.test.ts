@@ -99,8 +99,8 @@ test("parseGrowthRules throws on invalid variants (2 per field class)", () => {
 
 test("closure: a business forced idle closes after exactly idle_close_steps steps", () => {
   const s0 = genesis(goblinArc, "city-test-closure", "seed-c1");
-  // Isolate closure: no entrepreneur may rebuild the closed farm during this test.
-  const noEntry = { ...growth, entry_price_premium_bps: 1000000000n };
+  // Isolate closure: no entrepreneur may rebuild the closed farm during this test, and no working capital topup.
+  const noEntry = { ...growth, entry_price_premium_bps: 1000000000n, topup_floor_bps: 0n };
   // Find a business that needs input, e.g. mill (needs grain)
   // Ensure there is no grain in the entire city so mill can never produce or buy
   for (const sec of s0.sectors) {
@@ -110,6 +110,10 @@ test("closure: a business forced idle closes after exactly idle_close_steps step
       if (b.recipe === "farm") {
         // Close farms so no grain is ever produced
         b.open = false;
+      }
+      if (b.recipe === "mill") {
+        // Model true insolvency (cannot pay wage)
+        b.coin = 0n;
       }
     }
   }
@@ -155,6 +159,15 @@ test("closure: a producing business never closes", () => {
 
 test("auction: inventory and coin move correctly and conserve totals", () => {
   const s0 = genesis(goblinArc, "city-test-auction", "seed-c3");
+  // Isolate auction: no entry
+  const noEntry = { ...growth, entry_price_premium_bps: 1000000000n };
+  for (const sec of s0.sectors) {
+    for (const b of sec.businesses) {
+      if (b.id !== "mill-0" && b.id !== "mill-1") {
+        b.open = false;
+      }
+    }
+  }
   // Add mill-1 so there is a buyer for grain
   const mill1 = {
     id: "mill-1",
@@ -179,8 +192,9 @@ test("auction: inventory and coin move correctly and conserve totals", () => {
   s0.totals.items["grain"] = (s0.totals.items["grain"] ?? 0n) + 5n;
   const initialTotalCoin = s0.totals.coin;
   const initialGrainTotal = s0.totals.items["grain"] ?? 0n;
+  const initialPurse = s0.citizens.purse;
 
-  const res = step(s0, { arc: goblinArc, pricing, growth });
+  const res = step(s0, { arc: goblinArc, pricing, growth: noEntry });
   const s1 = res.state;
 
   const nextMill0 = s1.sectors[0].businesses.find((b) => b.id === "mill-0")!;
@@ -190,7 +204,15 @@ test("auction: inventory and coin move correctly and conserve totals", () => {
   assert.equal(nextMill1.open, true, "mill-1 should remain open");
   // mill-1 should have bought grain from mill-0 in auction
   assert.ok((nextMill1.inventory["grain"] ?? 0n) > 0n, "mill-1 should have acquired grain");
-  assert.ok(nextMill0.coin > 0n, "mill-0 should have received coin from auction");
+  // Closed business releases remaining coin (auction proceeds) to citizen purse
+  const businessCoin = mill1.coin - nextMill1.coin;
+  assert.ok(businessCoin > 0n, "auction generated coin for the closed business");
+  assert.equal(nextMill0.coin, 0n, "closed mill-0 coin must be 0 after releasing to purse");
+  assert.equal(
+    s1.citizens.purse,
+    initialPurse + businessCoin,
+    "citizen purse must have increased by exactly the closed business's coin"
+  );
 
   // Verify conservation
   let sumCoin = s1.citizens.purse + s1.treasury;

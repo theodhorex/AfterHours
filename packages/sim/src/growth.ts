@@ -130,14 +130,53 @@ export function processClosuresAndAuctions(
   recipeMap: Map<string, ArcRecipe>,
   productionRunsMap: Map<string, bigint>,
   idleCloseSteps: number,
-  events: SimEvent[]
+  events: SimEvent[],
+  growth?: GrowthRules
 ): void {
   for (const b of allBusinesses) {
     if (!b.open) continue;
 
     const runs = productionRunsMap.get(b.id) ?? 0n;
     if (runs === 0n) {
-      b.insolvent_steps += 1;
+      const recipe = recipeMap.get(b.recipe);
+      let isAtStockCap = false;
+      if (recipe && growth) {
+        for (const [item, perRun] of Object.entries(recipe.outputs)) {
+          const cap = BigInt(growth.stock_cap_runs) * recipe.max_per_run_per_business * perRun;
+          // Capped when no whole run still fits (same room rule as the production phase).
+          if ((b.inventory[item] ?? 0n) + perRun > cap) {
+            isAtStockCap = true;
+            break;
+          }
+        }
+      }
+
+      let isInputStarvedByClosedSector = false;
+      if (recipe && !isAtStockCap && b.coin >= recipe.wage) {
+        // Starved when at least one lacking input has no open producer anywhere.
+        for (const [item, needed] of Object.entries(recipe.inputs)) {
+          if ((b.inventory[item] ?? 0n) >= needed) continue;
+          let hasOpenProducer = false;
+          for (const other of allBusinesses) {
+            if (!other.open || other.id === b.id) continue;
+            const r = recipeMap.get(other.recipe);
+            if (r && r.outputs[item] !== undefined) {
+              hasOpenProducer = true;
+              break;
+            }
+          }
+          if (!hasOpenProducer) {
+            isInputStarvedByClosedSector = true;
+            break;
+          }
+        }
+      }
+
+      if (isAtStockCap || isInputStarvedByClosedSector) {
+        // Do not count steps where idleness is due to stock cap or upstream sector closed
+      } else {
+        b.insolvent_steps += 1;
+      }
     } else {
       b.insolvent_steps = 0;
     }
@@ -194,8 +233,69 @@ export function processClosuresAndAuctions(
           }
         }
       }
+
+      // A ruin must not lock coin: release the remaining purse to the citizens so entry can rebuild.
+      nextState.citizens.purse += b.coin;
+      b.coin = 0n;
     }
   }
+}
+
+function feedsMissingEssential(
+  recipe: ArcRecipe,
+  nextState: CityState,
+  arc: ArcFile
+): number {
+  // 2 = feeds an input an open business lacks (upstream first), 1 = feeds an unmet citizen need, 0 = neither
+  let tier = 0;
+  const allOpenBusinesses = nextState.sectors.flatMap((sec) => sec.businesses).filter((b) => b.open);
+
+  for (const [outputItem] of Object.entries(recipe.outputs)) {
+    // 1. Feeds an unmet citizen need
+    for (const need of arc.citizens.needs) {
+      if (need.item === outputItem || (need.alt && need.alt.includes(outputItem))) {
+        let openProducers = 0;
+        let producerStock = 0n;
+        for (const b of allOpenBusinesses) {
+          const r = arc.recipes.find((rec) => rec.id === b.recipe);
+          if (r && r.outputs[outputItem] !== undefined) {
+            openProducers++;
+            producerStock += b.inventory[outputItem] ?? 0n;
+          }
+        }
+        const citizenDemand = (nextState.citizens.population * need.per_capita_milli) / 1000n;
+        if (openProducers === 0 || producerStock < citizenDemand) {
+          tier = 1;
+        }
+      }
+    }
+
+    // 2. Feeds an input that a currently open business lacks
+    for (const b of allOpenBusinesses) {
+      const bRecipe = arc.recipes.find((rec) => rec.id === b.recipe);
+      if (bRecipe && bRecipe.inputs[outputItem] !== undefined) {
+        const needed = bRecipe.inputs[outputItem];
+        const target = bRecipe.max_per_run_per_business * needed;
+        const currentInv = b.inventory[outputItem] ?? 0n;
+        if (currentInv < target) {
+          let openProducers = 0;
+          let producerStock = 0n;
+          for (const other of allOpenBusinesses) {
+            const r = arc.recipes.find((rec) => rec.id === other.recipe);
+            if (r && r.outputs[outputItem] !== undefined) {
+              openProducers++;
+              producerStock += other.inventory[outputItem] ?? 0n;
+            }
+          }
+          if (openProducers === 0 || producerStock < (target - currentInv)) {
+            return 2;
+          }
+        }
+      }
+    }
+  }
+
+  return tier;
 }
 
 /**
@@ -218,6 +318,7 @@ export function processEntrepreneurEntry(
 
   let bestRecipe: ArcRecipe | null = null;
   let bestMargin: bigint | null = null;
+  let bestTier = 0;
 
   for (const recipe of arc.recipes) {
     // Closed businesses are ruins and do not use a slot, so the city can rebuild.
@@ -225,6 +326,20 @@ export function processEntrepreneurEntry(
     if (sectorCount >= maxPerSector) {
       continue;
     }
+
+    // Do not rebuild a business whose input has no open producer: it would only starve and close again.
+    const inputsSupplied = Object.keys(recipe.inputs).every((item) =>
+      nextState.sectors.some((sec) =>
+        sec.businesses.some((ob) => ob.open && arc.recipes.some((r) => r.id === ob.recipe && r.outputs[item] !== undefined))
+      )
+    );
+    if (!inputsSupplied) continue;
+
+    // Do not pile onto a sector whose open businesses are already idling: supply, not capacity, is short.
+    const sectorStruggling = nextState.sectors[recipe.sector].businesses.some(
+      (ob) => ob.open && ob.recipe === recipe.id && ob.insolvent_steps > 0 && ob.coin >= recipe.wage
+    );
+    if (sectorStruggling) continue;
 
     const outputEntries = Object.entries(recipe.outputs);
     if (outputEntries.length === 0) continue;
@@ -258,17 +373,27 @@ export function processEntrepreneurEntry(
       continue;
     }
 
+    const tier = feedsMissingEssential(recipe, nextState, arc);
+
+    let isBetter = false;
     if (bestRecipe === null || bestMargin === null) {
-      bestRecipe = recipe;
-      bestMargin = margin_bps;
-    } else if (margin_bps > bestMargin) {
-      bestRecipe = recipe;
-      bestMargin = margin_bps;
-    } else if (margin_bps === bestMargin) {
-      if (recipe.id < bestRecipe.id) {
-        bestRecipe = recipe;
-        bestMargin = margin_bps;
+      isBetter = true;
+    } else if (tier > bestTier) {
+      isBetter = true;
+    } else if (tier < bestTier) {
+      isBetter = false;
+    } else {
+      if (margin_bps > bestMargin) {
+        isBetter = true;
+      } else if (margin_bps === bestMargin && recipe.id < bestRecipe.id) {
+        isBetter = true;
       }
+    }
+
+    if (isBetter) {
+      bestRecipe = recipe;
+      bestMargin = margin_bps;
+      bestTier = tier;
     }
   }
 

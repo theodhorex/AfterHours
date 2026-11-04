@@ -10,9 +10,9 @@
   "from_step": 0,
   "items": {
     "bread": {
-      "consumed_pop": "2910",
+      "consumed_pop": "2898",
       "consumed_recipe": "0",
-      "produced": "2910",
+      "produced": "2898",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
@@ -21,7 +21,7 @@
     "crystal": {
       "consumed_pop": "0",
       "consumed_recipe": "109",
-      "produced": "200",
+      "produced": "204",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
@@ -37,9 +37,9 @@
       "trade_to_players": "0"
     },
     "fish": {
-      "consumed_pop": "838",
+      "consumed_pop": "850",
       "consumed_recipe": "0",
-      "produced": "1114",
+      "produced": "1126",
       "sourced": "0",
       "sunk": "64",
       "trade_from_players": "0",
@@ -47,8 +47,8 @@
     },
     "flour": {
       "consumed_pop": "0",
-      "consumed_recipe": "1455",
-      "produced": "1588",
+      "consumed_recipe": "1449",
+      "produced": "1590",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
@@ -65,8 +65,8 @@
     },
     "grain": {
       "consumed_pop": "0",
-      "consumed_recipe": "3229",
-      "produced": "3795",
+      "consumed_recipe": "3233",
+      "produced": "3767",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
@@ -74,8 +74,8 @@
     },
     "ingot": {
       "consumed_pop": "0",
-      "consumed_recipe": "63",
-      "produced": "140",
+      "consumed_recipe": "68",
+      "produced": "111",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
@@ -83,8 +83,8 @@
     },
     "ore": {
       "consumed_pop": "0",
-      "consumed_recipe": "280",
-      "produced": "416",
+      "consumed_recipe": "222",
+      "produced": "394",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
@@ -92,8 +92,8 @@
     },
     "scrap": {
       "consumed_pop": "0",
-      "consumed_recipe": "111",
-      "produced": "386",
+      "consumed_recipe": "116",
+      "produced": "378",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
@@ -111,15 +111,15 @@
     "tool": {
       "consumed_pop": "52",
       "consumed_recipe": "0",
-      "produced": "63",
+      "produced": "68",
       "sourced": "0",
       "sunk": "0",
       "trade_from_players": "0",
       "trade_to_players": "0"
     }
   },
-  "new_city_root": "c63ee5184cff6e90f4e2c05f04096c8302e827efb87d38e69a87856af917943d",
-  "new_state_root": "899e88b035b0728afaddda09873e0c97ba9bd99a9e5884ad8a5d5dff27b8d2a4",
+  "new_city_root": "b1b3ec83e921e5e5934ff72aa1531fa7e8d62e780bffec71493c18c80b2da956",
+  "new_state_root": "cc0a7d8415b52137c8a644273659793d4a7cacc458d52e3b71370101771075d3",
   "player_deltas": [],
   "stage": 0,
   "to_step": 40

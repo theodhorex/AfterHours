@@ -217,7 +217,8 @@ export function step(state: CityState, ctx: StepContext, ordersArg?: PlayerOrder
       recipeMap,
       productionRunsMap,
       ctx.growth.idle_close_steps,
-      events
+      events,
+      ctx.growth
     );
   }
 
@@ -342,7 +343,9 @@ export function step(state: CityState, ctx: StepContext, ordersArg?: PlayerOrder
   for (const itemDef of sortedItems) {
     const itemId = itemDef.id;
     let stock = 0n;
-    for (const b of allBusinesses) stock += b.inventory[itemId] ?? 0n;
+    for (const b of allBusinesses) {
+      if (b.open) stock += b.inventory[itemId] ?? 0n;
+    }
 
     const reqUnits = demandUnitsStep[itemId] ?? 0n;
     const alpha = ctx.pricing.dem_ema_alpha_bps;
