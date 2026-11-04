@@ -40,15 +40,21 @@ export function MarketPanel({ items }: MarketPanelProps) {
         </div>
       </div>
 
-      {/* Market table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left font-mono text-xs border-collapse">
+      {/* Market table with labelled horizontal scroll container */}
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label="City commodities and pricing table"
+        className="overflow-x-auto atlas-focus rounded-xs"
+      >
+        <table className="w-full text-left font-mono text-xs border-collapse min-w-[420px]">
+          <caption className="sr-only">City Market Commodities and Price Derivations</caption>
           <thead>
             <tr className="border-b border-atlas-line-strong text-atlas-ink-muted uppercase tracking-wider text-[11px]">
-              <th className="py-2.5 px-2">Commodity</th>
-              <th className="py-2.5 px-2 text-right">Price</th>
-              <th className="py-2.5 px-2 text-center">Trend</th>
-              <th className="py-2.5 px-2 min-w-[120px]">Stock / Target</th>
+              <th scope="col" className="py-2.5 px-2">Commodity</th>
+              <th scope="col" className="py-2.5 px-2 text-right">Price</th>
+              <th scope="col" className="py-2.5 px-2 text-center">Trend</th>
+              <th scope="col" className="py-2.5 px-2 min-w-[120px]">Stock / Target</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-atlas-line/60">
@@ -84,7 +90,8 @@ export function MarketPanel({ items }: MarketPanelProps) {
                       aria-haspopup="dialog"
                       aria-expanded={isTooltipOpen}
                       aria-describedby={isTooltipOpen ? `price-tooltip-${item.id}` : undefined}
-                      className="font-bold text-atlas-gold underline decoration-dotted decoration-atlas-gold/60 underline-offset-4 cursor-help atlas-focus px-1 py-0.5 rounded-xs hover:text-atlas-ink hover:bg-atlas-surface-raised"
+                      aria-label={`Price for ${item.name}: ${formatCoin(item.price)}. Inspect mathematical derivation.`}
+                      className="font-bold text-atlas-gold underline decoration-dotted decoration-atlas-gold/60 underline-offset-4 cursor-help atlas-focus px-1.5 py-1 rounded-xs hover:text-atlas-ink hover:bg-atlas-surface-raised min-h-[44px] min-w-[44px] inline-flex items-center justify-end sm:min-h-0 sm:min-w-0"
                       onMouseEnter={() => setActiveTooltipId(item.id)}
                       onMouseLeave={() => setActiveTooltipId((prev) => (prev === item.id ? null : prev))}
                       onFocus={() => setActiveTooltipId(item.id)}

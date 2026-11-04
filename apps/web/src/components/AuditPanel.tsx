@@ -240,7 +240,12 @@ export function AuditPanel({
         </div>
 
         {hasCheckpoints ? (
-          <div className="overflow-x-auto">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="State root checkpoints chain"
+            className="overflow-x-auto atlas-focus rounded-xs"
+          >
             <div className="flex gap-2 pb-1 min-w-full">
               {workingList.map((cp, idx) => {
                 const isTampered = tamperedIdx === idx;
@@ -271,7 +276,7 @@ export function AuditPanel({
             </div>
           </div>
         ) : (
-          <div className="p-3 text-center rounded-xs bg-atlas-canvas/50 border border-dashed border-atlas-line text-xs font-mono text-atlas-ash">
+          <div role="status" className="p-3 text-center rounded-xs bg-atlas-canvas/50 border border-dashed border-atlas-line text-xs font-mono text-atlas-ash">
             No checkpoints generated yet. Use the simulation controls above to advance at least 40 steps.
           </div>
         )}
@@ -283,7 +288,7 @@ export function AuditPanel({
           type="button"
           onClick={handleRunAudit}
           disabled={!hasCheckpoints || isAuditing}
-          className={`atlas-focus px-4 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 ${
+          className={`atlas-focus px-4 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 min-h-[44px] ${
             !hasCheckpoints || isAuditing
               ? "bg-atlas-ash/20 text-atlas-ash border border-atlas-line cursor-not-allowed"
               : "bg-atlas-gold text-atlas-canvas hover:bg-atlas-gold/90 border border-atlas-gold cursor-pointer"
@@ -307,14 +312,14 @@ export function AuditPanel({
           )}
         </button>
 
-        <div className="flex items-center gap-2 font-mono text-xs">
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
           <label htmlFor="tamper-kind-select" className="text-atlas-ink-muted">Demo tamper:</label>
           <select
             id="tamper-kind-select"
             value={selectedTamperKind}
             onChange={(e) => setSelectedTamperKind(e.target.value as TamperKind)}
             disabled={isAuditing || !hasCheckpoints}
-            className="atlas-focus bg-atlas-surface border border-atlas-line text-atlas-ink px-2 py-1.5 rounded-xs"
+            className="atlas-focus bg-atlas-surface border border-atlas-line text-atlas-ink px-2 py-1.5 rounded-xs min-h-[44px] sm:min-h-fit"
           >
             <option value="state_root">Corrupt state_root</option>
             <option value="produced+1">produced+1 flow</option>
@@ -324,7 +329,7 @@ export function AuditPanel({
             type="button"
             onClick={handleTamper}
             disabled={isAuditing || !hasCheckpoints}
-            className="atlas-focus px-3 py-1.5 rounded-xs bg-atlas-surface-raised border border-atlas-ember text-atlas-ember hover:bg-atlas-ember/15 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="atlas-focus px-3 py-1.5 rounded-xs bg-atlas-surface-raised border border-atlas-ember text-atlas-ember hover:bg-atlas-ember/15 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px] sm:min-h-fit inline-flex items-center"
             title={`Tamper with ${tamperTargetLabel} to test mismatch detection`}
           >
             Tamper with checkpoint {workingList.length >= 2 ? "2" : "1"}
@@ -334,7 +339,7 @@ export function AuditPanel({
               type="button"
               onClick={handleResetCheckpoints}
               disabled={isAuditing}
-              className="atlas-focus px-2.5 py-1.5 rounded-xs text-atlas-ink-muted hover:text-atlas-ink underline text-[11px]"
+              className="atlas-focus px-2.5 py-1.5 rounded-xs text-atlas-ink-muted hover:text-atlas-ink underline text-[11px] min-h-[44px] sm:min-h-fit inline-flex items-center cursor-pointer"
             >
               Restore honest
             </button>
@@ -425,7 +430,7 @@ export function AuditPanel({
             type="button"
             onClick={handleVerifyTestnet}
             disabled={isComparingChain}
-            className={`atlas-focus px-3.5 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 ${
+            className={`atlas-focus px-3.5 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 min-h-[44px] ${
               isComparingChain
                 ? "bg-atlas-ash/20 text-atlas-ash border border-atlas-line cursor-not-allowed"
                 : "bg-atlas-surface-raised border border-atlas-gold text-atlas-gold hover:bg-atlas-gold/15 cursor-pointer"
@@ -446,8 +451,13 @@ export function AuditPanel({
           </button>
         </div>
 
-        {/* Live Region for Results */}
+        {/* Live Region for Results / Empty / Loading */}
         <div aria-live="polite" role="status" aria-atomic="true">
+          {!chainResult && !isComparingChain && (
+            <div className="text-xs font-mono text-atlas-ash italic">
+              No testnet comparison performed yet. Click above to replay and verify on-chain state.
+            </div>
+          )}
           {chainResult && (
             <div
               className={`p-3 rounded-xs font-mono text-xs border space-y-1.5 ${
@@ -483,7 +493,7 @@ export function AuditPanel({
                 href={buildExplorerTxUrl(cp.txId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="atlas-focus p-2 rounded-xs border border-atlas-line bg-atlas-surface-raised hover:border-atlas-gold hover:bg-atlas-gold/5 transition-colors font-mono text-xs flex flex-col gap-0.5 group"
+                className="atlas-focus p-2 rounded-xs border border-atlas-line bg-atlas-surface-raised hover:border-atlas-gold hover:bg-atlas-gold/5 transition-colors font-mono text-xs flex flex-col justify-center gap-0.5 group min-h-[44px]"
                 aria-label={`View Checkpoint ${cp.index} (steps ${cp.fromStep} to ${cp.toStep}) on NearBlocks`}
               >
                 <div className="flex items-center justify-between text-[11px] text-atlas-ink-muted">

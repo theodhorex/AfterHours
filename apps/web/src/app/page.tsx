@@ -200,7 +200,7 @@ export default function CityViewPage() {
             <button
               type="button"
               onClick={handleReset}
-              className="atlas-focus px-3 py-1.5 rounded-xs bg-atlas-alert text-atlas-canvas font-mono font-semibold text-xs hover:bg-atlas-alert/90 transition-colors"
+              className="atlas-focus px-3 py-1.5 rounded-xs bg-atlas-alert text-atlas-canvas font-mono font-semibold text-xs hover:bg-atlas-alert/90 transition-colors min-h-[44px] sm:min-h-fit inline-flex items-center cursor-pointer"
             >
               Reset & Recover Simulation
             </button>

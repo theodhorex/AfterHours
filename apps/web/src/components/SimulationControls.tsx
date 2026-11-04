@@ -48,7 +48,7 @@ export function SimulationControls({
             value={arcId}
             disabled={isRunning}
             onChange={(e) => onSelectArc(e.target.value)}
-            className="atlas-focus bg-atlas-surface border border-atlas-line text-atlas-ink px-2 py-1 rounded-xs cursor-pointer hover:border-atlas-line-strong focus:outline-none"
+            className="atlas-focus bg-atlas-surface border border-atlas-line text-atlas-ink px-2 py-1 rounded-xs cursor-pointer hover:border-atlas-line-strong min-h-[44px] sm:min-h-[32px]"
           >
             {availableArcs.map((id) => (
               <option key={id} value={id}>
@@ -68,7 +68,7 @@ export function SimulationControls({
             value={seed}
             disabled={isRunning}
             onChange={(e) => onChangeSeed(e.target.value)}
-            className="atlas-focus bg-atlas-surface border border-atlas-line text-atlas-gold px-2 py-1 rounded-xs w-28 sm:w-32 focus:outline-none"
+            className="atlas-focus bg-atlas-surface border border-atlas-line text-atlas-gold px-2 py-1 rounded-xs w-28 sm:w-32 min-h-[44px] sm:min-h-[32px]"
             placeholder="world_seed"
           />
         </div>
@@ -82,7 +82,7 @@ export function SimulationControls({
           onClick={onStepSeason}
           disabled={isRunning}
           aria-label="Advance 1 season (1 step)"
-          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-line hover:border-atlas-gold/80 hover:bg-atlas-surface-raised text-atlas-ink font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-line hover:border-atlas-gold/80 hover:bg-atlas-surface-raised text-atlas-ink font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px] sm:min-h-[32px] inline-flex items-center justify-center cursor-pointer"
         >
           +1 Season
         </button>
@@ -93,7 +93,7 @@ export function SimulationControls({
           onClick={onStepYear}
           disabled={isRunning}
           aria-label="Advance 1 year (4 steps)"
-          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-line hover:border-atlas-gold/80 hover:bg-atlas-surface-raised text-atlas-ink font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-line hover:border-atlas-gold/80 hover:bg-atlas-surface-raised text-atlas-ink font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px] sm:min-h-[32px] inline-flex items-center justify-center cursor-pointer"
         >
           +1 Year (4)
         </button>
@@ -104,7 +104,7 @@ export function SimulationControls({
           onClick={onStepDecade}
           disabled={isRunning}
           aria-label="Advance 10 years (40 steps)"
-          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-line hover:border-atlas-gold/80 hover:bg-atlas-surface-raised text-atlas-ink font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-line hover:border-atlas-gold/80 hover:bg-atlas-surface-raised text-atlas-ink font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px] sm:min-h-[32px] inline-flex items-center justify-center cursor-pointer"
         >
           +10 Yrs (40)
         </button>
@@ -115,10 +115,12 @@ export function SimulationControls({
           onClick={onFastForward}
           disabled={isRunning}
           aria-label="Fast-forward 40 steps over 30 seconds"
-          className="atlas-focus px-3 py-1 rounded-xs bg-atlas-gold/15 border border-atlas-gold/60 text-atlas-gold hover:bg-atlas-gold/25 font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+          className="atlas-focus px-3 py-1 rounded-xs bg-atlas-gold/15 border border-atlas-gold/60 text-atlas-gold hover:bg-atlas-gold/25 font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px] sm:min-h-[32px] inline-flex items-center justify-center gap-1.5 cursor-pointer"
         >
-          <span>▶</span>
-          <span>{isRunning ? `Running (${stepsRemaining})` : "Fast-Forward"}</span>
+          <span aria-hidden="true">▶</span>
+          <span role="status" aria-live="polite">
+            {isRunning ? `Running (${stepsRemaining})` : "Fast-Forward"}
+          </span>
         </button>
 
         {/* Always visible Pause */}
@@ -127,9 +129,9 @@ export function SimulationControls({
           onClick={onPause}
           disabled={!isRunning}
           aria-label="Pause fast-forward"
-          className={`atlas-focus px-2.5 py-1 rounded-xs border font-semibold transition-colors ${
+          className={`atlas-focus px-2.5 py-1 rounded-xs border font-semibold transition-colors min-h-[44px] sm:min-h-[32px] inline-flex items-center justify-center ${
             isRunning
-              ? "bg-atlas-ember/20 border-atlas-ember text-atlas-ember hover:bg-atlas-ember/30 animate-pulse"
+              ? "bg-atlas-ember/20 border-atlas-ember text-atlas-ember hover:bg-atlas-ember/30 animate-pulse cursor-pointer"
               : "bg-atlas-surface border-atlas-line text-atlas-ink-muted/50 cursor-not-allowed opacity-50"
           }`}
         >
@@ -141,7 +143,7 @@ export function SimulationControls({
           type="button"
           onClick={onReset}
           aria-label="Reset simulation to step 0"
-          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-alert/40 text-atlas-alert/90 hover:bg-atlas-alert/15 hover:border-atlas-alert hover:text-atlas-alert font-semibold transition-colors"
+          className="atlas-focus px-2.5 py-1 rounded-xs bg-atlas-surface border border-atlas-alert/40 text-atlas-alert/90 hover:bg-atlas-alert/15 hover:border-atlas-alert hover:text-atlas-alert font-semibold transition-colors min-h-[44px] sm:min-h-[32px] inline-flex items-center justify-center cursor-pointer"
         >
           ↺ Reset
         </button>

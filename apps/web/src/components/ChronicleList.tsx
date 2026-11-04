@@ -35,44 +35,50 @@ export function ChronicleList({ events }: ChronicleListProps) {
       </div>
 
       {/* Events timeline */}
-      <ol className="relative border-l border-atlas-line-strong ml-2 space-y-4">
-        {events.map((ev) => {
-          const style = KIND_COLORS[ev.kind] ?? KIND_COLORS.civic;
+      {events.length === 0 ? (
+        <div role="status" className="text-xs font-mono text-atlas-ash italic py-4 text-center">
+          No historical events recorded yet for this settlement.
+        </div>
+      ) : (
+        <ol className="relative border-l border-atlas-line-strong ml-2 space-y-4">
+          {events.map((ev) => {
+            const style = KIND_COLORS[ev.kind] ?? KIND_COLORS.civic;
 
-          return (
-            <li key={ev.id} className="ml-4 pl-1">
-              {/* Timeline marker pip */}
-              <div
-                className="absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full bg-atlas-canvas border-2 border-atlas-line-strong"
-                aria-hidden="true"
-              />
+            return (
+              <li key={ev.id} className="ml-4 pl-1">
+                {/* Timeline marker pip */}
+                <div
+                  className="absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full bg-atlas-canvas border-2 border-atlas-line-strong"
+                  aria-hidden="true"
+                />
 
-              <div className="bg-atlas-surface-raised/60 hover:bg-atlas-surface-raised p-3 rounded-xs border border-atlas-line transition-colors">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[10px] font-mono font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-xs border ${style.bg} ${style.text} ${style.border}`}
-                    >
-                      {style.label}
+                <div className="bg-atlas-surface-raised/60 hover:bg-atlas-surface-raised p-3 rounded-xs border border-atlas-line transition-colors">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-mono font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-xs border ${style.bg} ${style.text} ${style.border}`}
+                      >
+                        {style.label}
+                      </span>
+                      <h3 className="font-display font-semibold text-sm text-atlas-ink">
+                        {ev.title}
+                      </h3>
+                    </div>
+
+                    <span className="font-mono text-[11px] text-atlas-gold">
+                      {formatStep(ev.step)}
                     </span>
-                    <h3 className="font-display font-semibold text-sm text-atlas-ink">
-                      {ev.title}
-                    </h3>
                   </div>
 
-                  <span className="font-mono text-[11px] text-atlas-gold">
-                    {formatStep(ev.step)}
-                  </span>
+                  <p className="text-xs text-atlas-ink-muted leading-relaxed">
+                    {ev.description}
+                  </p>
                 </div>
-
-                <p className="text-xs text-atlas-ink-muted leading-relaxed">
-                  {ev.description}
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </div>
   );
 }

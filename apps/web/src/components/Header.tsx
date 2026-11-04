@@ -82,12 +82,12 @@ export function Header({ city }: HeaderProps) {
         </div>
 
         {/* Quiet disclaimer note */}
-        <div className="mt-2.5 pt-2 border-t border-atlas-line/60 flex items-center justify-between text-[11px] text-atlas-ink-muted/80">
+        <div className="mt-2.5 pt-2 border-t border-atlas-line/60 flex flex-wrap items-center justify-between gap-1 text-[11px] text-atlas-ink-muted">
           <p className="flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-atlas-ember/70 animate-pulse" aria-hidden="true" />
             <span>Autonomous settlement simulated state</span>
           </p>
-          <span className="italic text-atlas-ink-muted/70">
+          <span className="italic text-atlas-ink-muted">
             Simulation running in your browser (mock mode, no chain)
           </span>
         </div>

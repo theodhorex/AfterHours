@@ -184,7 +184,7 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
               value={selectedPresetKey}
               onChange={(e) => handleSelectPreset(e.target.value)}
               disabled={isBacktesting}
-              className="atlas-focus w-full bg-atlas-surface border border-atlas-line text-atlas-ink px-3 py-1.5 rounded-xs font-mono text-xs"
+              className="atlas-focus w-full bg-atlas-surface border border-atlas-line text-atlas-ink px-3 py-1.5 rounded-xs font-mono text-xs min-h-[44px] sm:min-h-fit"
             >
               <option value="flour-trader">Flour Trader (buy flour low, sell high)</option>
               <option value="grain-hoarder">Grain Hoarder (stockpile agricultural surplus)</option>
@@ -274,25 +274,28 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
             </div>
           )}
 
-          {/* Run Backtest Trigger */}
-          <button
-            type="button"
-            onClick={handleRunBacktest}
-            disabled={isBacktesting || validationErrors.length > 0}
-            className="atlas-focus w-full px-4 py-2.5 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center justify-center gap-2 bg-atlas-gold text-atlas-canvas hover:bg-atlas-gold/90 border border-atlas-gold disabled:bg-atlas-ash/20 disabled:text-atlas-ash disabled:border-atlas-line disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isBacktesting ? (
-              <>
-                <span className="inline-block animate-spin" aria-hidden="true">⏳</span>
-                <span>{backtestProgressText || "Simulating agent backtest..."}</span>
-              </>
-            ) : (
-              <>
-                <span aria-hidden="true">⚡</span>
-                <span>Run backtest ({steps} steps)</span>
-              </>
-            )}
-          </button>
+            {/* Run Backtest Trigger */}
+            <button
+              type="button"
+              onClick={handleRunBacktest}
+              disabled={isBacktesting || validationErrors.length > 0}
+              className="atlas-focus w-full px-4 py-2.5 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center justify-center gap-2 bg-atlas-gold text-atlas-canvas hover:bg-atlas-gold/90 border border-atlas-gold disabled:bg-atlas-ash/20 disabled:text-atlas-ash disabled:border-atlas-line disabled:cursor-not-allowed cursor-pointer min-h-[44px]"
+            >
+              {isBacktesting ? (
+                <>
+                  <span className="inline-block animate-spin" aria-hidden="true">⏳</span>
+                  <span>{backtestProgressText || "Simulating agent backtest..."}</span>
+                </>
+              ) : (
+                <>
+                  <span aria-hidden="true">⚡</span>
+                  <span>Run backtest ({steps} steps)</span>
+                </>
+              )}
+            </button>
+            <div role="status" aria-live="polite" className="sr-only">
+              {isBacktesting ? (backtestProgressText || "Simulating agent backtest...") : "Agent backtest idle"}
+            </div>
 
           {/* How Agents Work Summary */}
           <div className="p-3 rounded-xs bg-atlas-surface-raised/60 border border-atlas-line/60 text-[11px] font-mono text-atlas-ink-muted space-y-1.5 leading-relaxed">
@@ -316,7 +319,12 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
             <span className="text-atlas-ink-muted text-[11px]">Ranked by score, then trades</span>
           </div>
 
-          <div className="overflow-x-auto border border-atlas-line rounded-xs bg-atlas-surface">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Autonomous agent verified leaderboard"
+            className="overflow-x-auto border border-atlas-line rounded-xs bg-atlas-surface atlas-focus"
+          >
             <table className="w-full text-left font-mono text-xs min-w-[500px]">
               <caption className="sr-only">
                 Anyone can re-run this agent on the same seed and get the same score and state root (mock mode, no chain)
@@ -334,7 +342,7 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
               <tbody className="divide-y divide-atlas-line/60">
                 {leaderboard.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-atlas-ash font-mono text-xs">
+                    <td colSpan={6} role="status" className="p-6 text-center text-atlas-ash font-mono text-xs">
                       No backtests recorded yet. Run a backtest on the left to rank your agent.
                     </td>
                   </tr>
@@ -374,15 +382,15 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
                         <td className="p-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {status === "verifying" && (
-                              <span className="text-[10px] text-atlas-gold animate-pulse">⏳ Replaying...</span>
+                              <span role="status" aria-live="polite" className="text-[10px] text-atlas-gold animate-pulse">⏳ Replaying...</span>
                             )}
                             {status === "verified" && (
-                              <span className="px-1.5 py-0.5 rounded-xs bg-atlas-moss/20 border border-atlas-moss text-atlas-moss font-bold text-[10px]">
+                              <span role="status" aria-live="polite" className="px-1.5 py-0.5 rounded-xs bg-atlas-moss/20 border border-atlas-moss text-atlas-moss font-bold text-[10px]">
                                 VERIFIED
                               </span>
                             )}
                             {status === "mismatch" && (
-                              <span className="px-1.5 py-0.5 rounded-xs bg-atlas-alert/20 border border-atlas-alert text-atlas-alert font-bold text-[10px]">
+                              <span role="status" aria-live="polite" className="px-1.5 py-0.5 rounded-xs bg-atlas-alert/20 border border-atlas-alert text-atlas-alert font-bold text-[10px]">
                                 MISMATCH
                               </span>
                             )}
@@ -390,8 +398,9 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
                               <button
                                 type="button"
                                 onClick={() => handleReverifyRow(entry)}
-                                className="atlas-focus px-2 py-0.5 rounded-xs bg-atlas-surface-raised border border-atlas-line text-atlas-ink-muted hover:text-atlas-ink text-[10px] transition-colors cursor-pointer"
+                                className="atlas-focus px-2 py-0.5 rounded-xs bg-atlas-surface-raised border border-atlas-line text-atlas-ink-muted hover:text-atlas-ink text-[10px] transition-colors cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center sm:min-h-0 sm:min-w-0"
                                 title="Re-run simulation to verify score and state root"
+                                aria-label={`Re-verify simulation for ${entry.name}`}
                               >
                                 Re-verify
                               </button>
@@ -399,7 +408,7 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
                             <button
                               type="button"
                               onClick={() => handleRemoveEntry(entry.id)}
-                              className="atlas-focus p-1 rounded-xs text-atlas-ash hover:text-atlas-alert hover:bg-atlas-alert/10 transition-colors cursor-pointer"
+                              className="atlas-focus p-1 rounded-xs text-atlas-ash hover:text-atlas-alert hover:bg-atlas-alert/10 transition-colors cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-1"
                               aria-label={`Remove ${entry.name} from leaderboard`}
                               title="Remove entry"
                             >

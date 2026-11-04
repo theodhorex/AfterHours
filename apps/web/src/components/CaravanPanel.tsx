@@ -65,7 +65,7 @@ export function CaravanPanel() {
           type="button"
           onClick={handleRunCaravan}
           disabled={isRunning}
-          className={`atlas-focus px-4 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 ${
+          className={`atlas-focus px-4 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 min-h-[44px] ${
             isRunning
               ? "bg-atlas-ash/20 text-atlas-ash border border-atlas-line cursor-not-allowed"
               : "bg-atlas-gold text-atlas-canvas hover:bg-atlas-gold/90 border border-atlas-gold cursor-pointer"
@@ -151,8 +151,14 @@ export function CaravanPanel() {
           </div>
 
           {result.rows.length > 0 ? (
-            <div className="overflow-x-auto border border-atlas-line rounded-xs">
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="Inter-city caravan transactions ledger"
+              className="overflow-x-auto border border-atlas-line rounded-xs atlas-focus"
+            >
               <table className="w-full text-left font-mono text-xs divide-y divide-atlas-line min-w-[320px]">
+                <caption className="sr-only">Inter-city caravan transactions ledger</caption>
                 <thead className="bg-atlas-surface-raised text-atlas-ink-muted uppercase text-[10px] tracking-wider">
                   <tr>
                     <th scope="col" className="px-3 py-2">Step</th>
@@ -181,7 +187,7 @@ export function CaravanPanel() {
               </table>
             </div>
           ) : (
-            <div className="p-3 text-center rounded-xs bg-atlas-canvas/50 border border-dashed border-atlas-line text-xs font-mono text-atlas-ash">
+            <div role="status" className="p-3 text-center rounded-xs bg-atlas-canvas/50 border border-dashed border-atlas-line text-xs font-mono text-atlas-ash">
               No caravans were dispatched during the simulation.
             </div>
           )}
@@ -190,7 +196,7 @@ export function CaravanPanel() {
 
       {/* Initial empty state */}
       {!result && !isRunning && !error && (
-        <div className="p-4 text-center rounded-xs bg-atlas-canvas/50 border border-dashed border-atlas-line text-xs font-mono text-atlas-ash leading-relaxed">
+        <div role="status" className="p-4 text-center rounded-xs bg-atlas-canvas/50 border border-dashed border-atlas-line text-xs font-mono text-atlas-ash leading-relaxed">
           Click &quot;Run 400-step caravan world&quot; above to simulate inter-city food shipments from Dino Vale to Elf Grove and verify economic conservation in your browser.
         </div>
       )}
