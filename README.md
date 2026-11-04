@@ -6,8 +6,7 @@ Four fantasy cities run a full supply chain: farms, mills, bakeries, forges, wor
 
 Built for the **NEAR HACKATHON**, track **Games With Real Economies**. Code started on 2026-11-04. Status: work in progress, testnet only.
 
-- **Contract (v2, with city market):** [`afterhours-11042023-theo.testnet`](https://testnet.nearblocks.io/address/afterhours-11042023-theo.testnet)
-- **First verified slice (v1):** [`afterhours-11041910-theo.testnet`](https://testnet.nearblocks.io/address/afterhours-11041910-theo.testnet), city `city-goblin_warrens`, 200 steps
+- **Contract (v3, with city market, 4 cities published):** [`afterhours-11042120-theo.testnet`](https://testnet.nearblocks.io/address/afterhours-11042120-theo.testnet)
 - **Network:** NEAR testnet, no real funds
 - **Repository:** https://github.com/theodhorex/AfterHours
 - **AI assistance and libraries:** [`docs/AI_AND_LIBRARIES.md`](docs/AI_AND_LIBRARIES.md)
@@ -120,21 +119,18 @@ An independent review of the contract (a different model from the one that wrote
 
 ## Measured on Testnet
 
-| What | Result |
-|---|---|
-| Contract v1 account | `afterhours-11041910-theo.testnet` |
-| Arc registered | [`HhamH2JA...R73`](https://testnet.nearblocks.io/txns/HhamH2JAWy2Xzr33gtWJb4SRg2hMhCCgsSSFTbeLpR73) |
-| City created | [`8Tc1wjwZ...sHH`](https://testnet.nearblocks.io/txns/8Tc1wjwZPKREUDXfw1oiPFs8wKiYuEjrzxYWs8sUHKH) |
-| Checkpoint 0 to 40 | [`6aPz2kdH...kZ`](https://testnet.nearblocks.io/txns/6aPz2kdH2yR12KM3qrUuSNgEyqKnKwkuuYGQtkQWbkuZ) |
-| Checkpoint 40 to 80 | [`2MNM6QHo...e3`](https://testnet.nearblocks.io/txns/2MNM6QHo9tYcrvmqaQZzTPeSHo966TiW1A7xy8VWBie3) |
-| Checkpoint 80 to 120 | [`5pQBBhJc...Rd`](https://testnet.nearblocks.io/txns/5pQBBhJcuxPzEAEcWSWZprG3hwKoJtcXeJHq8rRn8Ryd) |
-| Checkpoint 120 to 160 | [`5HMkLBUn...7P`](https://testnet.nearblocks.io/txns/5HMkLBUnGYuzNWNBtTXfJSJB4ndmf8xiU95nMRyAQ7tP) |
-| Checkpoint 160 to 200 | [`Dt5AEsz7...Fg`](https://testnet.nearblocks.io/txns/Dt5AEsz7J52iZ58XSyy8jNeg7H4VmuThgjWpyqgU2FcG) |
-| On-chain state root at step 200 | `bc4fe79adc950876fc4cfd873fae3234124bf0d26dc5f059f5029e8798d754ac` |
-| Local replay root at step 200 | identical (2026-11-04) |
-| Contract v2 (with market) | deployed and initialised, `get_listing` answers `null`; the four cities will be republished here |
+Contract v3: [`afterhours-11042120-theo.testnet`](https://testnet.nearblocks.io/address/afterhours-11042120-theo.testnet). Four cities, 200 steps each (2026-11-04, engine at commit dc4f4b2): 4 arcs registered, 4 cities created, 20 checkpoints accepted, all by the same contract that checks conservation and caps on-chain.
 
-These transactions were made by the engine version of 2026-11-04 afternoon. The engine was fixed afterwards (stalled cities, see Progress Log), so the v1 city is kept as evidence of the mechanism, not as a current replay target.
+| City | State root at step 200 | Arc | City tx | Checkpoints (0-40, 40-80, 80-120, 120-160, 160-200) |
+|---|---|---|---|---|
+| `city-goblin_warrens` | `22adb8808d9e0b7b3f4dfc1e1cac49a09c52ff1c975cc6c643045cac7c92bd6b` | [`DEYJE8v2...x3`](https://testnet.nearblocks.io/txns/DEYJE8v2v4PomNyzUdfMBkyBV9S81YNym36XEFp1Trx3) | [`G8taL327...3E`](https://testnet.nearblocks.io/txns/G8taL327LnhEYyRvPEHVJJsZrKanxh4uMWSV2ggvbk3E) | [`2gzqBXu6...Ak`](https://testnet.nearblocks.io/txns/2gzqBXu6Lwz2uARq5qE6ANto72hJ2ibtmCB7nwBFFgAk) · [`92yFRdua...D2`](https://testnet.nearblocks.io/txns/92yFRduawFqiCnNE9iViHt2RkCvYT8tJr6AZJKUWygD2) · [`3NXVn5qr...sb`](https://testnet.nearblocks.io/txns/3NXVn5qrvgXL7KAyZgCrN4ADsKG6frqjrDJcqaeAQosb) · [`6ZeqtG5G...zq`](https://testnet.nearblocks.io/txns/6ZeqtG5GKY2sobnekrtYQyaP1Dc4ieG4vTWeis9KLgzq) · [`AoQGP9vF...YM`](https://testnet.nearblocks.io/txns/AoQGP9vF18aagGrdszxpZSgJcpeQ7GF37nqNASHvUYM) |
+| `city-cave_hold` | `e734d48cc95e0d9a1abc6fc718915523840daf47d3c85c051e5f1d5f096a9e01` | [`2XSt3gDt...zc`](https://testnet.nearblocks.io/txns/2XSt3gDt28CWHvG6qVsXhVT9hTwpNxBMQ3du8UsAeazc) | [`HkVSzGVt...93`](https://testnet.nearblocks.io/txns/HkVSzGVt2KvNcD518ETKwAmR6sjnQFku3JAAJyq5Fo93) | [`BheNsrmz...tk`](https://testnet.nearblocks.io/txns/BheNsrmztwW7AzTQ7Uci7qeTS6pZ1277zpsPC19xtCtk) · [`4wajMN7C...GY`](https://testnet.nearblocks.io/txns/4wajMN7CywjeLZe1QoZj3CHQCwpwW6psVj5mB82iZEGY) · [`GhYr8zC1...sb`](https://testnet.nearblocks.io/txns/GhYr8zC1GVqKwFNPFQEXqjro1RWrNR4Wu6L5XYxMQPsb) · [`DNkMgdVJ...wz`](https://testnet.nearblocks.io/txns/DNkMgdVJn7MtGwggJg5Y6DmtQK3bhViQn2EhASSaXvwz) · [`87jf1Gji...dc`](https://testnet.nearblocks.io/txns/87jf1GjiQ9jJScAt3bc6pZaquUrp4QvFPrbKFrHuYudc) |
+| `city-dino_vale` | `f5923ad9516c8815d5b6f9f60d0cc1b3bdbaf720f58863b8de0a1b5345b68bb4` | [`Deabt1Cu...3P`](https://testnet.nearblocks.io/txns/Deabt1CuYf2VNVkrfKE6ncNZNXnmt2jJrdEG1EKirb3P) | [`GjWQhbpi...XX`](https://testnet.nearblocks.io/txns/GjWQhbpijy2zWH5P8s6WW2iKNQNuLuutGUNvQjJxjyXX) | [`J28xXzok...9h`](https://testnet.nearblocks.io/txns/J28xXzokwWDUiY2bnZtrmpfW5ybrvXpkiXAvqFbQeo9h) · [`72ytUY32...zy`](https://testnet.nearblocks.io/txns/72ytUY32psX1u6sav6PVHRTz2daBgJdjCw1bUNP29Szy) · [`8kU1YD9H...rc`](https://testnet.nearblocks.io/txns/8kU1YD9HEiJm5YajrD2bxxZCvo5m33Fcxf2E2RNwR5rc) · [`3ffGWGcJ...EB`](https://testnet.nearblocks.io/txns/3ffGWGcJpGrrDMMX4tmzNNLxsvThJpqfZLvX2TW2UcEB) · [`HsZzrRNL...wD`](https://testnet.nearblocks.io/txns/HsZzrRNLGWhFv916YneCyLypkaf8kNyp3bDMCYzbn9wD) |
+| `city-elf_grove` | `4f7ab4ab4eb5f87b52481f6ab37aeeb1d6b6af3689d313ceadb205c67d680e08` | [`EWHYRWyr...uz`](https://testnet.nearblocks.io/txns/EWHYRWyrSXpSn6aE4DRKJXg1X16ywMvQvBnBVSJXdWuz) | [`AqWxqN9p...yz`](https://testnet.nearblocks.io/txns/AqWxqN9pKyguSjZTA23ghinnexUF24BsRmKyCyvBCjyz) | [`9ZBZDwwy...yd`](https://testnet.nearblocks.io/txns/9ZBZDwwyJ3yugijaNZdSt2B2EBbCUMj5eGtBmHHusvyd) · [`HTPCdKKZ...wZ`](https://testnet.nearblocks.io/txns/HTPCdKKZDmsJJcBowkyRnwLrXswCQTwwwGzeDkhq4uwZ) · [`B7mUvYNq...xz`](https://testnet.nearblocks.io/txns/B7mUvYNq2ZYWqxYo3a1eMDbozVvNCGJp9aM2Arj7Tcxz) · [`41Z9Dg9K...u1`](https://testnet.nearblocks.io/txns/41Z9Dg9K9z7ro9hLNqxRs8oa5HwrM3pP2nB7cecwk8u1) · [`Hs1uP8dz...mJ`](https://testnet.nearblocks.io/txns/Hs1uP8dzx8KBp9kVSYYzSdDVJbfZh94fcm47RUhHjumJ) |
+
+Check one yourself: `near contract call-function as-read-only afterhours-11042120-theo.testnet get_city json-args '{"city_id":"city-goblin_warrens"}' network-config testnet now`, then replay with `node scripts/testnet_publish.ts` logic or the browser Audit panel and compare the root.
+
+Earlier contracts (v1 `afterhours-11041910-theo.testnet`, v2 `afterhours-11042023-theo.testnet`) were built by earlier engine versions and are kept only as history; they are not replay targets.
 
 ## What NEAR Makes Possible Here
 
@@ -165,6 +161,8 @@ Updated after each accepted milestone.
 | 2026-11-04 | Accessibility pass: AA contrast, 44 px touch targets, scroll regions, live status, reduced motion |
 | 2026-11-04 | Independent contract review: 14 findings (1 high, 4 medium) |
 | 2026-11-04 | Contract fixes: item and cap bounds, `buy_city` pinned to the audited root, callback payouts with `claimable` balance, mint cap (95 contract tests) |
+| 2026-11-04 | Growth engine fixes (stock-cap closure, entry rules) and Elf Grove forager grain 2 to 4: every arc reaches stage 2 or higher on 4 seeds, 0 bankruptcies; satisfaction still below 80% in some arcs and seeds (Dino Vale 64-71%, Elf Grove 62-79%) |
+| 2026-11-04 | Four cities (200 steps each) published to contract v3: 20 checkpoints accepted on testnet |
 | 2026-11-04 | Growth engine fix: a stock-cap rule mismatch closed healthy businesses. Dino Vale now reaches stage 4 on three seeds, Cave Hold stage 2; Elf Grove still stalls at stage 1 (in progress) |
 
 ## Repository Layout
