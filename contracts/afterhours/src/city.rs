@@ -39,6 +39,10 @@ pub(crate) fn validate_city_id(id: &str) {
 #[near]
 impl AfterHours {
     /// Register a new city. Operator only.
+    ///
+    /// # Genesis Endowment
+    /// `create_city` genesis endowment is a separate, explicit, one-time event and stays as is
+    /// (operator-set totals at creation). This is the single place where totals are set freely.
     #[allow(clippy::too_many_arguments)]
     pub fn create_city(
         &mut self,
@@ -57,6 +61,11 @@ impl AfterHours {
             "UNAUTHORIZED_OPERATOR"
         );
         validate_city_id(&city_id);
+        crate::checkpoint::validate_id(&arc_id, "INVALID_ARC_ID");
+        crate::checkpoint::validate_id(&server_id, "INVALID_SERVER_ID");
+        for item_id in totals_items.keys() {
+            crate::checkpoint::validate_id(item_id, "INVALID_ITEM_ID");
+        }
         require!(!self.cities.contains_key(&city_id), "DUPLICATE_CITY_ID");
         require!(self.arcs.contains_key(&arc_id), "UNREGISTERED_ARC");
         crate::mt::validate_receiver_id(&owner);

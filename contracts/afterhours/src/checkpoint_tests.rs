@@ -28,7 +28,23 @@ fn set_caller(pred: &str) {
     testing_env!(ctx(pred).build());
 }
 
+fn set_caller_with_deposit(pred: &str, yocto: u128) {
+    testing_env!(ctx(pred).attached_deposit(NearToken::from_yoctonear(yocto)).build());
+}
+
+fn register_account(contract: &mut AfterHours, acc_id: &str) {
+    set_caller_with_deposit(acc_id, constants::STORAGE_DEPOSIT_MIN.as_yoctonear());
+    contract.storage_deposit(None);
+}
+
 fn setup_city(contract: &mut AfterHours) {
+    set_caller("operator.testnet");
+
+    // Register players for storage
+    register_account(contract, "bob.testnet");
+    register_account(contract, "carol.testnet");
+    register_account(contract, "dan.testnet");
+
     set_caller("operator.testnet");
 
     // Register arc with caps
@@ -36,7 +52,19 @@ fn setup_city(contract: &mut AfterHours) {
     prod_caps.insert("bread".to_string(), U128(100));
     let mut cons_caps = BTreeMap::new();
     cons_caps.insert("bread".to_string(), U128(100));
-    contract.register_arc("arc_test".to_string(), prod_caps, cons_caps);
+    let mut source_caps = BTreeMap::new();
+    source_caps.insert("bread".to_string(), U128(20));
+    let mut sink_caps = BTreeMap::new();
+    sink_caps.insert("bread".to_string(), U128(20));
+    contract.register_arc(
+        "arc_test".to_string(),
+        prod_caps,
+        cons_caps,
+        source_caps,
+        sink_caps,
+        U128(200),
+        U128(200),
+    );
 
     // Create city
     let mut totals = BTreeMap::new();
@@ -161,8 +189,10 @@ fn checkpoint_violating_conservation_rejected() {
 
     set_caller("operator.testnet");
     let mut cp = valid_base_checkpoint();
-    // Excessive sunk deduction causing underflow: 500 initial + 50 - 20 - 600
-    cp.items.get_mut("bread").unwrap().sunk = U128(600);
+    // Total additions: 500 initial + 50 produced + 5 sourced + 10 trade_from = 565.
+    // Deductions with trade_to_players 600: 20 consumed + 2 sunk + 600 trade_to = 622 > 565.
+    cp.items.get_mut("bread").unwrap().trade_to_players = U128(600);
+    cp.player_deltas[0].delta_in = U128(600);
     contract.submit_checkpoint(cp);
 }
 
@@ -291,6 +321,129 @@ fn checkpoint_cap_exceeded_rejected() {
 }
 
 #[test]
+#[should_panic(expected = "SOURCE_CAP_EXCEEDED")]
+fn checkpoint_sourced_over_cap_rejected() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    set_caller("operator.testnet");
+    let mut cp = valid_base_checkpoint();
+    // Cap is 20 per step; steps = 1; sourced = 21 => SOURCE_CAP_EXCEEDED
+    cp.items.get_mut("bread").unwrap().sourced = U128(21);
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
+#[should_panic(expected = "SINK_CAP_EXCEEDED")]
+fn checkpoint_sunk_over_cap_rejected() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    set_caller("operator.testnet");
+    let mut cp = valid_base_checkpoint();
+    // Cap is 20 per step; steps = 1; sunk = 21 => SINK_CAP_EXCEEDED
+    cp.items.get_mut("bread").unwrap().sunk = U128(21);
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
+#[should_panic(expected = "COIN_SOURCE_CAP_EXCEEDED")]
+fn checkpoint_coin_sourced_over_cap_rejected() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    set_caller("operator.testnet");
+    let mut cp = valid_base_checkpoint();
+    // Coin source cap is 200 per step; steps = 1; coin.sourced = 201 => COIN_SOURCE_CAP_EXCEEDED
+    cp.coin.sourced = U128(201);
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
+#[should_panic(expected = "COIN_SINK_CAP_EXCEEDED")]
+fn checkpoint_coin_sunk_over_cap_rejected() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    set_caller("operator.testnet");
+    let mut cp = valid_base_checkpoint();
+    // Coin sink cap is 200 per step; steps = 1; coin.sunk = 201 => COIN_SINK_CAP_EXCEEDED
+    cp.coin.sunk = U128(201);
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
+fn checkpoint_sourced_within_cap_accepted() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    set_caller("operator.testnet");
+    let mut cp = valid_base_checkpoint();
+    // Exactly at cap: sourced = 20, sunk = 20
+    cp.items.get_mut("bread").unwrap().sourced = U128(20);
+    cp.items.get_mut("bread").unwrap().sunk = U128(20);
+    cp.coin.sourced = U128(200);
+    cp.coin.sunk = U128(200);
+    contract.submit_checkpoint(cp);
+
+    let city = contract.get_city("city_test".to_string()).unwrap();
+    assert_eq!(city.step, 1);
+}
+
+#[test]
+fn checkpoint_rejected_preserves_state() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    let initial_city = contract.get_city("city_test".to_string()).unwrap();
+    let initial_bob_bread = contract.mt_balance_of(acc("bob.testnet"), "bread".to_string());
+    let initial_bob_coin = contract.mt_balance_of(acc("bob.testnet"), "coin".to_string());
+    assert!(!contract.get_executed("city_test".to_string(), "ord_1".to_string()));
+
+    set_caller("operator.testnet");
+    let mut bad_cp = valid_base_checkpoint();
+    bad_cp.items.get_mut("bread").unwrap().sourced = U128(9999);
+
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        contract.submit_checkpoint(bad_cp);
+    }));
+    assert!(res.is_err());
+
+    let final_city = contract.get_city("city_test".to_string()).unwrap();
+    assert_eq!(initial_city, final_city);
+    assert_eq!(contract.mt_balance_of(acc("bob.testnet"), "bread".to_string()), initial_bob_bread);
+    assert_eq!(contract.mt_balance_of(acc("bob.testnet"), "coin".to_string()), initial_bob_coin);
+    assert!(!contract.get_executed("city_test".to_string(), "ord_1".to_string()));
+}
+
+#[test]
+#[should_panic(expected = "PLAYER_NOT_REGISTERED")]
+fn checkpoint_unregistered_player_rejected() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    set_caller("operator.testnet");
+    let mut cp = valid_base_checkpoint();
+    // Eve is unregistered, delta_in > 0
+    cp.player_deltas.push(PlayerDelta {
+        account: acc("eve.testnet"),
+        token_id: "bread".to_string(),
+        delta_in: U128(5),
+        delta_out: U128(0),
+    });
+    // Adjust trade_to_players to match sum
+    cp.items.get_mut("bread").unwrap().trade_to_players = U128(25);
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
 fn seeded_property_loop_conserves_all_flows() {
     set_caller("alice.testnet");
     let mut contract = AfterHours::new(acc("operator.testnet"));
@@ -305,6 +458,9 @@ fn seeded_property_loop_conserves_all_flows() {
     let mut total_sunk: u128 = 0;
 
     let initial_city_bread: u128 = 500;
+    let initial_city_coin: u128 = 1000;
+    let mut total_coin_sourced: u128 = 0;
+    let mut total_coin_sunk: u128 = 0;
 
     // Simple LCG PRNG for deterministic test
     let mut seed: u64 = 0xabcdef1234567890;
@@ -321,16 +477,26 @@ fn seeded_property_loop_conserves_all_flows() {
 
         // Produce up to cap (100 * steps_advance)
         let prod = (r >> 8) % (100 * steps_advance as u128 + 1);
-        let src = (r >> 16) % 10;
+        let src = (r >> 16) % (20 * steps_advance as u128 + 1);
         let cons_rec = (r >> 24) % 10;
         let cons_pop = (r >> 32) % 10;
-        let sunk = (r >> 40) % 5;
 
         // Total city available before player trades
         let city_record = contract.get_city("city_test".to_string()).unwrap();
         let cur_city_bal = city_record.totals_items.get("bread").unwrap().0;
         let additions = prod + src;
+        let max_sunk = (cur_city_bal + additions).min(20 * steps_advance as u128);
+        let sunk = if max_sunk > 0 { (r >> 40) % (max_sunk + 1) } else { 0 };
         let city_deductions = cons_rec + cons_pop + sunk;
+
+        // Coin flows within caps (200 * steps_advance)
+        let cur_city_coin = city_record.total_coin.0;
+        let coin_src = (r >> 20) % (50 * steps_advance as u128 + 1);
+        let max_coin_sunk = (cur_city_coin + coin_src).min(50 * steps_advance as u128);
+        let coin_sunk = if max_coin_sunk > 0 { (r >> 28) % (max_coin_sunk + 1) } else { 0 };
+
+        total_coin_sourced += coin_src;
+        total_coin_sunk += coin_sunk;
 
         // Player trades
         let p_idx = (((r >> 48) % 3) as usize).min(2);
@@ -368,8 +534,8 @@ fn seeded_property_loop_conserves_all_flows() {
         );
 
         let coin = CoinFlow {
-            sourced: U128(0),
-            sunk: U128(0),
+            sourced: U128(coin_src),
+            sunk: U128(coin_sunk),
             trade_to_players: U128(0),
             trade_from_players: U128(0),
         };
@@ -418,5 +584,13 @@ fn seeded_property_loop_conserves_all_flows() {
         total_in_world, expected_in_world,
         "Invariant violated: total in world ({}) != expected ({})",
         total_in_world, expected_in_world
+    );
+
+    let final_city_coin = city_record.total_coin.0;
+    let expected_in_world_coin = initial_city_coin + total_coin_sourced - total_coin_sunk;
+    assert_eq!(
+        final_city_coin, expected_in_world_coin,
+        "Coin invariant violated: final ({}) != expected ({})",
+        final_city_coin, expected_in_world_coin
     );
 }

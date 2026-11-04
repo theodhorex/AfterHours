@@ -25,11 +25,17 @@ fn set_caller_with_deposit(pred: &str, yocto: u128) {
     testing_env!(ctx(pred).attached_deposit(NearToken::from_yoctonear(yocto)).build());
 }
 
+fn register_account(contract: &mut AfterHours, acc_id: &str) {
+    set_caller_with_deposit(acc_id, constants::STORAGE_DEPOSIT_MIN.as_yoctonear());
+    contract.storage_deposit(None);
+}
+
 #[test]
 fn test_constants() {
     assert_eq!(constants::MAX_STEPS_PER_CHECKPOINT, 40);
     assert_eq!(constants::MAX_ORDER_IDS_PER_CHECKPOINT, 256);
     assert_eq!(constants::MAX_STAGE, 4);
+    assert_eq!(constants::STORAGE_DEPOSIT_MIN.as_yoctonear(), 10_000_000_000_000_000_000_000);
 }
 
 #[test]
@@ -74,6 +80,7 @@ fn test_set_operator_unauthorized() {
 fn test_mt_transfer_happy_path() {
     set_caller("alice.testnet");
     let mut contract = AfterHours::new(acc("operator.testnet"));
+    register_account(&mut contract, "bob.testnet");
 
     contract.mint_internal(&acc("alice.testnet"), "bread", 50);
     contract.mint_internal(&acc("alice.testnet"), "coin", 100);
@@ -145,6 +152,7 @@ fn test_mt_transfer_zero_fails() {
 fn test_mt_transfer_insufficient_fails() {
     set_caller("alice.testnet");
     let mut contract = AfterHours::new(acc("operator.testnet"));
+    register_account(&mut contract, "bob.testnet");
     contract.mint_internal(&acc("alice.testnet"), "bread", 50);
 
     set_caller_with_deposit("alice.testnet", 1);
@@ -168,6 +176,7 @@ fn test_mt_transfer_invalid_receiver_fails() {
 fn test_mt_batch_transfer_happy_path() {
     set_caller("alice.testnet");
     let mut contract = AfterHours::new(acc("operator.testnet"));
+    register_account(&mut contract, "bob.testnet");
     contract.mint_internal(&acc("alice.testnet"), "bread", 50);
     contract.mint_internal(&acc("alice.testnet"), "coin", 100);
 
@@ -194,6 +203,7 @@ fn test_mt_batch_transfer_happy_path() {
 fn test_mt_batch_transfer_mismatched_lengths() {
     set_caller("alice.testnet");
     let mut contract = AfterHours::new(acc("operator.testnet"));
+    register_account(&mut contract, "bob.testnet");
     contract.mint_internal(&acc("alice.testnet"), "bread", 50);
 
     set_caller_with_deposit("alice.testnet", 1);
@@ -236,11 +246,119 @@ fn test_mt_views_and_internal_mint_burn() {
 }
 
 #[test]
+#[should_panic(expected = "RECEIVER_NOT_REGISTERED")]
+fn test_mt_transfer_unregistered_receiver_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    contract.mint_internal(&acc("alice.testnet"), "bread", 50);
+
+    set_caller_with_deposit("alice.testnet", 1);
+    contract.mt_transfer(acc("unregistered.testnet"), "bread".to_string(), U128(10), None, None);
+}
+
+#[test]
+#[should_panic(expected = "RECEIVER_NOT_REGISTERED")]
+fn test_mt_batch_transfer_unregistered_receiver_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    contract.mint_internal(&acc("alice.testnet"), "bread", 50);
+
+    set_caller_with_deposit("alice.testnet", 1);
+    contract.mt_batch_transfer(
+        acc("unregistered.testnet"),
+        vec!["bread".to_string()],
+        vec![U128(10)],
+        None,
+        None,
+    );
+}
+
+#[test]
+fn test_mt_transfer_registered_receiver_accepted() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    contract.mint_internal(&acc("alice.testnet"), "bread", 50);
+
+    register_account(&mut contract, "bob.testnet");
+    assert!(contract.is_registered(&acc("bob.testnet")));
+
+    set_caller_with_deposit("alice.testnet", 1);
+    contract.mt_transfer(acc("bob.testnet"), "bread".to_string(), U128(10), None, None);
+    assert_eq!(contract.mt_balance_of(acc("bob.testnet"), "bread".to_string()), U128(10));
+}
+
+#[test]
+#[should_panic(expected = "DEPOSIT_LESS_THAN_MIN")]
+fn test_storage_deposit_below_min_rejected() {
+    set_caller("bob.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller_with_deposit("bob.testnet", 5_000_000_000_000_000_000_000);
+    contract.storage_deposit(None);
+}
+
+#[test]
+fn test_storage_deposit_excess_refunded() {
+    use near_sdk::test_utils::get_created_receipts;
+
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller_with_deposit("alice.testnet", 50_000_000_000_000_000_000_000);
+    let bal = contract.storage_deposit(Some(acc("bob.testnet")));
+    assert_eq!(bal.total, U128(constants::STORAGE_DEPOSIT_MIN.as_yoctonear()));
+    assert_eq!(bal.available, U128(0));
+
+    assert!(contract.is_registered(&acc("bob.testnet")));
+    assert_eq!(
+        contract.storage_balance_of(acc("bob.testnet")),
+        Some(StorageBalance {
+            total: U128(constants::STORAGE_DEPOSIT_MIN.as_yoctonear()),
+            available: U128(0),
+        })
+    );
+
+    let bounds = contract.storage_balance_bounds();
+    assert_eq!(bounds.min, U128(constants::STORAGE_DEPOSIT_MIN.as_yoctonear()));
+    assert_eq!(bounds.max, Some(U128(constants::STORAGE_DEPOSIT_MIN.as_yoctonear())));
+
+    let receipts = get_created_receipts();
+    assert!(!receipts.is_empty());
+    let refund_receipt = receipts.iter().find(|r| r.receiver_id == acc("alice.testnet")).expect("Refund receipt not found");
+    let refund_action = refund_receipt.actions.iter().find(|a| matches!(a, near_sdk::mock::MockAction::Transfer { deposit, .. } if deposit.as_yoctonear() == 40_000_000_000_000_000_000_000));
+    assert!(refund_action.is_some(), "Expected refund transfer action of 0.04 NEAR");
+}
+
+#[test]
+fn test_storage_deposit_double_registration_refunds_all() {
+    use near_sdk::test_utils::get_created_receipts;
+
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller_with_deposit("bob.testnet", constants::STORAGE_DEPOSIT_MIN.as_yoctonear());
+    contract.storage_deposit(None);
+    assert!(contract.is_registered(&acc("bob.testnet")));
+
+    set_caller_with_deposit("carol.testnet", 20_000_000_000_000_000_000_000);
+    let bal2 = contract.storage_deposit(Some(acc("bob.testnet")));
+    assert_eq!(bal2.total, U128(constants::STORAGE_DEPOSIT_MIN.as_yoctonear()));
+
+    let receipts = get_created_receipts();
+    let carol_receipt = receipts.iter().find(|r| r.receiver_id == acc("carol.testnet")).expect("Carol refund receipt not found");
+    let refund_action = carol_receipt.actions.iter().find(|a| matches!(a, near_sdk::mock::MockAction::Transfer { deposit, .. } if deposit.as_yoctonear() == 20_000_000_000_000_000_000_000));
+    assert!(refund_action.is_some(), "Expected full refund of 0.02 NEAR to carol");
+}
+
+#[test]
 fn test_mt_supply_conservation_random_transfers() {
     set_caller("alice.testnet");
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     let accounts = [acc("alice.testnet"), acc("bob.testnet"), acc("carol.testnet")];
+    for a in &accounts {
+        register_account(&mut contract, a.as_str());
+    }
     contract.mint_internal(&accounts[0], "coin", 10_000);
     contract.mint_internal(&accounts[1], "bread", 5_000);
 
@@ -527,7 +645,19 @@ fn register_default_arc(contract: &mut AfterHours, arc_id: &str) {
     produce.insert("bread".to_string(), U128(10));
     let mut consume = std::collections::BTreeMap::new();
     consume.insert("bread".to_string(), U128(10));
-    contract.register_arc(arc_id.to_string(), produce, consume);
+    let mut source = std::collections::BTreeMap::new();
+    source.insert("bread".to_string(), U128(5));
+    let mut sink = std::collections::BTreeMap::new();
+    sink.insert("bread".to_string(), U128(5));
+    contract.register_arc(
+        arc_id.to_string(),
+        produce,
+        consume,
+        source,
+        sink,
+        U128(100),
+        U128(100),
+    );
 }
 
 #[test]
@@ -542,6 +672,10 @@ fn test_register_arc_happy_path() {
     assert_eq!(arc.arc_id, "arc_1");
     assert_eq!(arc.produce_cap_per_step.get("bread"), Some(&U128(10)));
     assert_eq!(arc.consume_cap_per_step.get("bread"), Some(&U128(10)));
+    assert_eq!(arc.source_cap_per_step.get("bread"), Some(&U128(5)));
+    assert_eq!(arc.sink_cap_per_step.get("bread"), Some(&U128(5)));
+    assert_eq!(arc.coin_source_cap_per_step, U128(100));
+    assert_eq!(arc.coin_sink_cap_per_step, U128(100));
 
     let logs = get_logs();
     assert!(logs.iter().any(|l| l.contains("\"event\":\"arc_registered\"") && l.contains("arc_1")));
@@ -588,7 +722,17 @@ fn test_register_arc_invalid_item_id_fails() {
     let mut produce = std::collections::BTreeMap::new();
     produce.insert("BAD_ITEM!".to_string(), U128(10));
     let consume = std::collections::BTreeMap::new();
-    contract.register_arc("arc_1".to_string(), produce, consume);
+    let source = std::collections::BTreeMap::new();
+    let sink = std::collections::BTreeMap::new();
+    contract.register_arc(
+        "arc_1".to_string(),
+        produce,
+        consume,
+        source,
+        sink,
+        U128(0),
+        U128(0),
+    );
 }
 
 #[test]
@@ -603,7 +747,17 @@ fn test_register_arc_too_many_items_fails() {
         produce.insert(format!("item_{i}"), U128(1));
     }
     let consume = std::collections::BTreeMap::new();
-    contract.register_arc("arc_1".to_string(), produce, consume);
+    let source = std::collections::BTreeMap::new();
+    let sink = std::collections::BTreeMap::new();
+    contract.register_arc(
+        "arc_1".to_string(),
+        produce,
+        consume,
+        source,
+        sink,
+        U128(0),
+        U128(0),
+    );
 }
 
 #[test]
@@ -616,3 +770,48 @@ fn test_create_city_unregistered_arc_fails() {
     create_default_city(&mut contract, "city-1");
 }
 
+
+fn create_city_with(contract: &mut AfterHours, arc_id: &str, server_id: &str, item_key: &str) {
+    let mut totals = std::collections::BTreeMap::new();
+    totals.insert(item_key.to_string(), U128(1));
+    contract.create_city(
+        "city-x".to_string(),
+        arc_id.to_string(),
+        server_id.to_string(),
+        acc("alice.testnet"),
+        VALID_HEX64_A.to_string(),
+        VALID_HEX64_B.to_string(),
+        None,
+        totals,
+        U128(1),
+    );
+}
+
+#[test]
+#[should_panic(expected = "INVALID_ARC_ID")]
+fn test_create_city_invalid_arc_id_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    create_city_with(&mut contract, "Bad Arc!", "server_1", "bread");
+}
+
+#[test]
+#[should_panic(expected = "INVALID_SERVER_ID")]
+fn test_create_city_invalid_server_id_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+    create_city_with(&mut contract, "arc_1", &"s".repeat(65), "bread");
+}
+
+#[test]
+#[should_panic(expected = "INVALID_ITEM_ID")]
+fn test_create_city_invalid_totals_item_key_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+    create_city_with(&mut contract, "arc_1", "server_1", "Bad Item");
+}

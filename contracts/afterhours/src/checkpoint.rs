@@ -16,8 +16,9 @@
 //! # Honest Limit
 //! The smart contract verifies arithmetic conservation, step continuity, stage progression,
 //! order execution deduplication, and production/consumption caps. It does NOT replay the full
-//! simulation. Full execution validity is proven by clients replaying the deterministic simulation
-//! against the committed Merkle state roots.
+//! simulation. The caps BOUND what the operator can claim, they do not prove it; an operator can
+//! still claim up to the caps each step. Full proof is replay by clients against the committed
+//! Merkle state roots.
 
 use crate::{AfterHours, AfterHoursExt};
 use near_sdk::json_types::U128;
@@ -39,6 +40,10 @@ pub struct ArcCaps {
     pub arc_id: String,
     pub produce_cap_per_step: BTreeMap<String, U128>,
     pub consume_cap_per_step: BTreeMap<String, U128>,
+    pub source_cap_per_step: BTreeMap<String, U128>,
+    pub sink_cap_per_step: BTreeMap<String, U128>,
+    pub coin_source_cap_per_step: U128,
+    pub coin_sink_cap_per_step: U128,
 }
 
 #[near(serializers=[borsh, json])]
@@ -88,12 +93,17 @@ pub struct Checkpoint {
 
 #[near]
 impl AfterHours {
-    /// Register production and consumption caps for an arc. Operator only.
+    /// Register production, consumption, source, sink, and coin caps for an arc. Operator only.
+    #[allow(clippy::too_many_arguments)]
     pub fn register_arc(
         &mut self,
         arc_id: String,
         produce_cap_per_step: BTreeMap<String, U128>,
         consume_cap_per_step: BTreeMap<String, U128>,
+        source_cap_per_step: BTreeMap<String, U128>,
+        sink_cap_per_step: BTreeMap<String, U128>,
+        coin_source_cap_per_step: U128,
+        coin_sink_cap_per_step: U128,
     ) {
         require!(
             env::predecessor_account_id() == self.operator,
@@ -104,6 +114,8 @@ impl AfterHours {
 
         require!(produce_cap_per_step.len() <= 32, "TOO_MANY_ITEMS");
         require!(consume_cap_per_step.len() <= 32, "TOO_MANY_ITEMS");
+        require!(source_cap_per_step.len() <= 32, "TOO_MANY_ITEMS");
+        require!(sink_cap_per_step.len() <= 32, "TOO_MANY_ITEMS");
 
         for item_id in produce_cap_per_step.keys() {
             validate_id(item_id, "INVALID_ITEM_ID");
@@ -111,11 +123,21 @@ impl AfterHours {
         for item_id in consume_cap_per_step.keys() {
             validate_id(item_id, "INVALID_ITEM_ID");
         }
+        for item_id in source_cap_per_step.keys() {
+            validate_id(item_id, "INVALID_ITEM_ID");
+        }
+        for item_id in sink_cap_per_step.keys() {
+            validate_id(item_id, "INVALID_ITEM_ID");
+        }
 
         let caps = ArcCaps {
             arc_id: arc_id.clone(),
             produce_cap_per_step: produce_cap_per_step.clone(),
             consume_cap_per_step: consume_cap_per_step.clone(),
+            source_cap_per_step: source_cap_per_step.clone(),
+            sink_cap_per_step: sink_cap_per_step.clone(),
+            coin_source_cap_per_step,
+            coin_sink_cap_per_step,
         };
         self.arcs.insert(arc_id.clone(), caps);
 
@@ -125,6 +147,10 @@ impl AfterHours {
                 "arc_id": arc_id,
                 "produce_cap_per_step": produce_cap_per_step,
                 "consume_cap_per_step": consume_cap_per_step,
+                "source_cap_per_step": source_cap_per_step,
+                "sink_cap_per_step": sink_cap_per_step,
+                "coin_source_cap_per_step": coin_source_cap_per_step,
+                "coin_sink_cap_per_step": coin_sink_cap_per_step,
             }),
         );
     }
@@ -135,6 +161,10 @@ impl AfterHours {
     }
 
     /// Submit a verified simulation checkpoint. Operator only.
+    ///
+    /// # Honest Limit
+    /// The caps bound what the operator can claim; they do not prove it. An operator can still
+    /// claim up to the caps each step. Full proof is replay by clients.
     pub fn submit_checkpoint(&mut self, cp: Checkpoint) {
         // 1. Authorization & step continuity
         require!(
@@ -177,13 +207,15 @@ impl AfterHours {
             require!(!self.executed_orders.contains(&key), "ORDER_ALREADY_EXECUTED");
         }
 
-        // 5. Arc production and consumption caps
+        // 5. Arc production, consumption, source, sink, and coin caps
         let arc = self.arcs.get(&city.arc_id).expect("ARC_NOT_FOUND");
         let steps_u128 = steps as u128;
         for (item_id, flow) in &cp.items {
             validate_id(item_id, "INVALID_ITEM_ID");
             let prod_cap = arc.produce_cap_per_step.get(item_id).map(|u| u.0).unwrap_or(0);
             let cons_cap = arc.consume_cap_per_step.get(item_id).map(|u| u.0).unwrap_or(0);
+            let source_cap = arc.source_cap_per_step.get(item_id).map(|u| u.0).unwrap_or(0);
+            let sink_cap = arc.sink_cap_per_step.get(item_id).map(|u| u.0).unwrap_or(0);
 
             let max_produced = prod_cap.checked_mul(steps_u128).expect("CAP_OVERFLOW");
             require!(flow.produced.0 <= max_produced, "PRODUCE_CAP_EXCEEDED");
@@ -195,7 +227,19 @@ impl AfterHours {
                 .expect("CONSUMED_OVERFLOW");
             let max_consumed = cons_cap.checked_mul(steps_u128).expect("CAP_OVERFLOW");
             require!(total_consumed <= max_consumed, "CONSUME_CAP_EXCEEDED");
+
+            let max_sourced = source_cap.checked_mul(steps_u128).expect("CAP_OVERFLOW");
+            require!(flow.sourced.0 <= max_sourced, "SOURCE_CAP_EXCEEDED");
+
+            let max_sunk = sink_cap.checked_mul(steps_u128).expect("CAP_OVERFLOW");
+            require!(flow.sunk.0 <= max_sunk, "SINK_CAP_EXCEEDED");
         }
+
+        let max_coin_sourced = arc.coin_source_cap_per_step.0.checked_mul(steps_u128).expect("CAP_OVERFLOW");
+        require!(cp.coin.sourced.0 <= max_coin_sourced, "COIN_SOURCE_CAP_EXCEEDED");
+
+        let max_coin_sunk = arc.coin_sink_cap_per_step.0.checked_mul(steps_u128).expect("CAP_OVERFLOW");
+        require!(cp.coin.sunk.0 <= max_coin_sunk, "COIN_SINK_CAP_EXCEEDED");
 
         // 6. Conservation per item and coin
         let mut new_totals_items = city.totals_items.clone();
@@ -239,6 +283,9 @@ impl AfterHours {
 
         for pd in &cp.player_deltas {
             crate::mt::validate_receiver_id(&pd.account);
+            if pd.delta_in.0 > 0 {
+                require!(self.registered_accounts.contains(&pd.account), "PLAYER_NOT_REGISTERED");
+            }
             if pd.token_id != "coin" {
                 validate_id(&pd.token_id, "INVALID_TOKEN_ID");
             }

@@ -4,9 +4,11 @@ use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{env, near, require, AccountId, PanicOnDefault};
 
 pub mod constants {
+    use near_sdk::NearToken;
     pub const MAX_STEPS_PER_CHECKPOINT: u64 = 40;
     pub const MAX_ORDER_IDS_PER_CHECKPOINT: usize = 256;
     pub const MAX_STAGE: u8 = 4;
+    pub const STORAGE_DEPOSIT_MIN: NearToken = NearToken::from_yoctonear(10_000_000_000_000_000_000_000);
 }
 
 pub mod checkpoint;
@@ -15,6 +17,7 @@ pub mod mt;
 
 pub use checkpoint::{ArcCaps, Checkpoint, CoinFlow, ItemFlow, PlayerDelta};
 pub use city::CityRecord;
+pub use mt::{StorageBalance, StorageBalanceBounds};
 
 const EVENT_STANDARD: &str = "afterhours";
 const EVENT_VERSION: &str = "1.0.0";
@@ -40,6 +43,7 @@ pub struct AfterHours {
     pub cities: LookupMap<String, CityRecord>,
     pub arcs: LookupMap<String, ArcCaps>,
     pub executed_orders: LookupSet<String>,
+    pub registered_accounts: LookupSet<AccountId>,
 }
 
 #[near]
@@ -56,6 +60,7 @@ impl AfterHours {
             cities: LookupMap::new(b"c"),
             arcs: LookupMap::new(b"a"),
             executed_orders: LookupSet::new(b"e"),
+            registered_accounts: LookupSet::new(b"r"),
         }
     }
 

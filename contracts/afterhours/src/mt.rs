@@ -8,6 +8,20 @@ use crate::{AfterHours, AfterHoursExt};
 use near_sdk::json_types::U128;
 use near_sdk::{env, near, require, AccountId};
 
+#[near(serializers=[borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct StorageBalance {
+    pub total: U128,
+    pub available: U128,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct StorageBalanceBounds {
+    pub min: U128,
+    pub max: Option<U128>,
+}
+
 pub(crate) fn validate_receiver_id(account_id: &AccountId) {
     let s = account_id.as_str();
     require!(
@@ -112,6 +126,7 @@ impl AfterHours {
         require!(sender_id != receiver_id, "SELF_TRANSFER");
         require!(amount.0 > 0, "ZERO_AMOUNT");
         validate_receiver_id(&receiver_id);
+        require!(self.registered_accounts.contains(&receiver_id), "RECEIVER_NOT_REGISTERED");
 
         let sender_bal = self.internal_balance_of(&sender_id, &token_id);
         require!(sender_bal >= amount.0, "INSUFFICIENT_BALANCE");
@@ -188,6 +203,7 @@ impl AfterHours {
         let sender_id = env::predecessor_account_id();
         require!(sender_id != receiver_id, "SELF_TRANSFER");
         validate_receiver_id(&receiver_id);
+        require!(self.registered_accounts.contains(&receiver_id), "RECEIVER_NOT_REGISTERED");
         require!(token_ids.len() == amounts.len(), "MISMATCHED_LENGTHS");
         if let Some(ref apps) = approvals {
             require!(apps.len() == token_ids.len(), "MISMATCHED_LENGTHS");
@@ -295,5 +311,81 @@ impl AfterHours {
             .cloned()
             .unwrap_or_default();
         tokens.into_iter().skip(start).take(limit).collect()
+    }
+
+    /// Checks whether an account is registered for storage.
+    pub fn is_registered(&self, account_id: &AccountId) -> bool {
+        self.registered_accounts.contains(account_id)
+    }
+
+    /// Register an account for storage. Payable method.
+    ///
+    /// Requires attached deposit >= STORAGE_DEPOSIT_MIN (0.01 NEAR).
+    /// If target account is not yet registered:
+    ///   - registers account
+    ///   - keeps STORAGE_DEPOSIT_MIN
+    ///   - refunds excess to predecessor via Promise::transfer
+    ///   - emits `storage_registered` event
+    /// If target account is already registered:
+    ///   - refunds the entire attached deposit to predecessor via Promise::transfer
+    #[payable]
+    pub fn storage_deposit(&mut self, account_id: Option<AccountId>) -> StorageBalance {
+        let deposit = env::attached_deposit();
+        let min_deposit = crate::constants::STORAGE_DEPOSIT_MIN;
+        require!(deposit >= min_deposit, "DEPOSIT_LESS_THAN_MIN");
+
+        let predecessor = env::predecessor_account_id();
+        let target = account_id.unwrap_or_else(|| predecessor.clone());
+        validate_receiver_id(&target);
+
+        if self.is_registered(&target) {
+            if deposit.as_yoctonear() > 0 {
+                near_sdk::Promise::new(predecessor).transfer(deposit).detach();
+            }
+            return StorageBalance {
+                total: U128(min_deposit.as_yoctonear()),
+                available: U128(0),
+            };
+        }
+
+        self.registered_accounts.insert(target.clone());
+        let refund = deposit.saturating_sub(min_deposit);
+        if refund.as_yoctonear() > 0 {
+            near_sdk::Promise::new(predecessor).transfer(refund).detach();
+        }
+
+        crate::emit(
+            "storage_registered",
+            serde_json::json!({
+                "account_id": target,
+                "deposit": min_deposit.as_yoctonear().to_string(),
+            }),
+        );
+
+        StorageBalance {
+            total: U128(min_deposit.as_yoctonear()),
+            available: U128(0),
+        }
+    }
+
+    /// View storage balance of an account. Returns None if unregistered.
+    pub fn storage_balance_of(&self, account_id: AccountId) -> Option<StorageBalance> {
+        if self.is_registered(&account_id) {
+            Some(StorageBalance {
+                total: U128(crate::constants::STORAGE_DEPOSIT_MIN.as_yoctonear()),
+                available: U128(0),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// View storage balance bounds.
+    pub fn storage_balance_bounds(&self) -> StorageBalanceBounds {
+        let min = U128(crate::constants::STORAGE_DEPOSIT_MIN.as_yoctonear());
+        StorageBalanceBounds {
+            min,
+            max: Some(min),
+        }
     }
 }
