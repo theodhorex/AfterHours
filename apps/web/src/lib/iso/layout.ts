@@ -1,87 +1,77 @@
 /**
  * Deterministic municipal city layout generator.
- * Places 6 sector zones, connecting roads, bridges across rivers,
- * business buildings, and citizen houses based on simulation state.
+ * Places 6 sector districts, connecting roads, bridges across rivers,
+ * landmark & supporting buildings, distributed houses, central market plaza,
+ * and rural landscape features based on simulation state and stage.
  */
 
 import type { TerrainMap, TileKind } from "./terrain.ts";
 import type { CityView } from "../sim-view.ts";
+import type {
+  BuildingLayout,
+  HouseLayout,
+  RoadTile,
+  SupportingBuilding,
+  MarketStall,
+  RuralFeature,
+  SectorZone,
+  CityLayout,
+} from "./layout-types.ts";
 
-export interface BuildingLayout {
-  id: string;
-  name: string;
-  recipe: string;
-  sectorIdx: number;
-  tileX: number;
-  tileY: number;
-  level: number;
-  ruined: boolean;
-  open: boolean;
-}
-
-export interface HouseLayout {
-  id: string;
-  tileX: number;
-  tileY: number;
-  level: number;
-}
-
-export interface RoadTile {
-  x: number;
-  y: number;
-  isBridge: boolean;
-}
-
-export interface SectorZone {
-  idx: number;
-  kind: string;
-  name: string;
-  centerX: number;
-  centerY: number;
-  tiles: Array<{ x: number; y: number }>;
-}
-
-export interface CityLayout {
-  sectors: SectorZone[];
-  buildings: BuildingLayout[];
-  houses: HouseLayout[];
-  roads: RoadTile[];
-  plaza: { x: number; y: number };
-}
+export type {
+  BuildingLayout,
+  HouseLayout,
+  RoadTile,
+  SupportingBuilding,
+  MarketStall,
+  RuralFeature,
+  SectorZone,
+  CityLayout,
+};
 
 /**
- * Parses stage index from stage_id (e.g., "genesis"->0, "settlement"->1, "town"->2, "city"->3).
+ * Parses stage index from stage_id (0: hamlet, 1: village, 2: town, 3: city, 4: grand_city).
  */
-function getStageLevel(stageId: string): number {
-  const normalized = stageId.toLowerCase();
-  if (normalized.includes("genesis") || normalized.includes("0")) return 1;
-  if (normalized.includes("settlement") || normalized.includes("1")) return 2;
-  if (normalized.includes("town") || normalized.includes("2")) return 3;
-  if (normalized.includes("city") || normalized.includes("3") || normalized.includes("metropolis")) return 4;
-  return 2;
+export function getStageIndex(stageId: string): number {
+  const s = (stageId || "").toLowerCase();
+  if (s.includes("hamlet") || s.includes("genesis") || s === "0") return 0;
+  if (s.includes("village") || s.includes("settlement") || s === "1") return 1;
+  if (s.includes("town") || s === "2") return 2;
+  if (s.includes("grand") || s === "4") return 4;
+  if (s.includes("city") || s.includes("metropolis") || s === "3") return 3;
+  return 1;
 }
 
-/**
- * Finds the nearest land tile to a given coordinate.
- */
-function findNearestLand(
+const DISTRICT_SUPPORT_KINDS: Record<string, string[]> = {
+  food: ["field", "barn", "fence", "crop_plot"],
+  ore: ["shack", "cart_track", "rock_pile", "shack"],
+  forge: ["workshop", "chimney", "workshop", "anvil_station"],
+  alchemy: ["domed_hut", "herb_garden", "domed_hut", "alembic_shed"],
+  harbor: ["warehouse", "pier", "warehouse", "boat_slip"],
+  tower: ["courtyard", "watch_post", "courtyard", "ward_stone"],
+};
+
+const RURAL_KINDS: Array<RuralFeature["kind"]> = ["farmland", "orchard", "fence", "well", "pond"];
+
+function findFreeLandTile(
   targetX: number,
   targetY: number,
   terrain: TerrainMap,
-  occupied: Set<string>
+  occupied: Set<string>,
+  roads: Map<string, RoadTile>,
+  maxR = 16
 ): { x: number; y: number } | null {
   const size = terrain.size;
-  const maxRadius = Math.max(targetX, size - targetX, targetY, size - targetY);
-
-  for (let r = 0; r <= maxRadius; r++) {
+  for (let r = 0; r <= maxR; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
         const nx = targetX + dx;
         const ny = targetY + dy;
         if (nx >= 1 && nx < size - 1 && ny >= 1 && ny < size - 1) {
-          const kind: TileKind = terrain.tiles[ny][nx];
-          if (kind !== "water" && !occupied.has(`${nx},${ny}`)) {
+          const key = `${nx},${ny}`;
+          if (!occupied.has(key) && !roads.has(key) && terrain.tiles[ny][nx] !== "water") {
+            occupied.add(key);
             return { x: nx, y: ny };
           }
         }
@@ -91,10 +81,6 @@ function findNearestLand(
   return null;
 }
 
-/**
- * Traces a road path between two points.
- * Where the road intersects water, it becomes a bridge.
- */
 function buildRoad(
   fromX: number,
   fromY: number,
@@ -105,38 +91,49 @@ function buildRoad(
 ) {
   let currX = fromX;
   let currY = fromY;
-
   while (currX !== toX || currY !== toY) {
-    if (currX !== toX) {
-      currX += toX > currX ? 1 : -1;
-    } else if (currY !== toY) {
-      currY += toY > currY ? 1 : -1;
-    }
+    if (currX !== toX) currX += toX > currX ? 1 : -1;
+    else if (currY !== toY) currY += toY > currY ? 1 : -1;
+
+    // Do not pave over the destination anchor itself (landmark building sits there)
+    if (currX === toX && currY === toY) break;
 
     const key = `${currX},${currY}`;
-    const tileKind = terrain.tiles[currY][currX];
-    const isBridge = tileKind === "water";
-
+    const tileKind: TileKind = terrain.tiles[currY][currX];
     if (!roadMap.has(key)) {
-      roadMap.set(key, { x: currX, y: currY, isBridge });
+      roadMap.set(key, { x: currX, y: currY, isBridge: tileKind === "water" });
     }
   }
 }
 
 /**
- * Computes deterministic layout of sectors, roads, businesses, and houses.
+ * Computes deterministic layout of districts, roads, landmark/supporting buildings,
+ * distributed citizen houses, market plaza, and landscape features.
  */
 export function layoutCity(terrain: TerrainMap, view: CityView): CityLayout {
   const size = terrain.size;
   const mid = Math.floor(size / 2);
-
-  // 1. Locate Central Plaza on land
   const occupiedTiles = new Set<string>();
-  const plazaCandidate = findNearestLand(mid, mid, terrain, occupiedTiles);
-  const plaza = plazaCandidate ?? { x: mid, y: mid };
+  const roadMap = new Map<string, RoadTile>();
+
+  // 1. Central Plaza
+  let plaza = { x: mid, y: mid };
+  for (let r = 0; r < size; r++) {
+    let found = false;
+    for (let dy = -r; dy <= r && !found; dy++) {
+      for (let dx = -r; dx <= r && !found; dx++) {
+        const nx = mid + dx;
+        const ny = mid + dy;
+        if (nx >= 1 && nx < size - 1 && ny >= 1 && ny < size - 1 && terrain.tiles[ny][nx] !== "water") {
+          plaza = { x: nx, y: ny };
+          found = true;
+        }
+      }
+    }
+    if (found) break;
+  }
   occupiedTiles.add(`${plaza.x},${plaza.y}`);
 
-  // Sector relative positions around plaza
   const sectorOffsets = [
     { dx: -10, dy: -8 }, // 0: food (NW)
     { dx: -10, dy: 8 },  // 1: ore (SW)
@@ -147,42 +144,49 @@ export function layoutCity(terrain: TerrainMap, view: CityView): CityLayout {
   ];
 
   const sectors: SectorZone[] = [];
-  const roadMap = new Map<string, RoadTile>();
-  const buildingList: BuildingLayout[] = [];
-  const stageLevel = getStageLevel(view.stage_id);
+  const buildings: BuildingLayout[] = [];
+  const stageIndex = getStageIndex(view.stage_id);
+  const stageLevel = stageIndex + 1;
 
-  // 2. Place Sector Anchors & Connect Roads to Plaza
+  // 2. Locate District Anchors & Roads
   for (let sIdx = 0; sIdx < view.sectors.length; sIdx++) {
     const sec = view.sectors[sIdx];
     const off = sectorOffsets[sIdx % sectorOffsets.length];
-    const targetX = Math.max(3, Math.min(size - 4, plaza.x + off.dx));
-    const targetY = Math.max(3, Math.min(size - 4, plaza.y + off.dy));
+    const tx = Math.max(3, Math.min(size - 4, plaza.x + off.dx));
+    const ty = Math.max(3, Math.min(size - 4, plaza.y + off.dy));
 
-    const anchor = findNearestLand(targetX, targetY, terrain, occupiedTiles) ?? {
-      x: targetX,
-      y: targetY,
-    };
-
-    occupiedTiles.add(`${anchor.x},${anchor.y}`);
-
-    // Connect anchor to plaza with road/bridge
-    buildRoad(plaza.x, plaza.y, anchor.x, anchor.y, terrain, roadMap);
-
-    // Build zone tiles around anchor
-    const zoneTiles: Array<{ x: number; y: number }> = [];
-    const zoneRadius = 4;
-    for (let dy = -zoneRadius; dy <= zoneRadius; dy++) {
-      for (let dx = -zoneRadius; dx <= zoneRadius; dx++) {
-        const zx = anchor.x + dx;
-        const zy = anchor.y + dy;
-        if (zx >= 0 && zx < size && zy >= 0 && zy < size) {
-          if (terrain.tiles[zy][zx] !== "water") {
-            zoneTiles.push({ x: zx, y: zy });
+    let anchor = { x: tx, y: ty };
+    for (let r = 0; r < size; r++) {
+      let found = false;
+      for (let dy = -r; dy <= r && !found; dy++) {
+        for (let dx = -r; dx <= r && !found; dx++) {
+          const nx = tx + dx;
+          const ny = ty + dy;
+          if (nx >= 1 && nx < size - 1 && ny >= 1 && ny < size - 1) {
+            const k = `${nx},${ny}`;
+            if (!occupiedTiles.has(k) && terrain.tiles[ny][nx] !== "water") {
+              anchor = { x: nx, y: ny };
+              found = true;
+            }
           }
         }
       }
+      if (found) break;
     }
+    occupiedTiles.add(`${anchor.x},${anchor.y}`);
+    buildRoad(plaza.x, plaza.y, anchor.x, anchor.y, terrain, roadMap);
 
+    // District Zone tile boundaries
+    const zoneTiles: Array<{ x: number; y: number }> = [];
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const zx = anchor.x + dx;
+        const zy = anchor.y + dy;
+        if (zx >= 0 && zx < size && zy >= 0 && zy < size && terrain.tiles[zy][zx] !== "water") {
+          zoneTiles.push({ x: zx, y: zy });
+        }
+      }
+    }
     sectors.push({
       idx: sec.idx,
       kind: sec.kind,
@@ -192,102 +196,151 @@ export function layoutCity(terrain: TerrainMap, view: CityView): CityLayout {
       tiles: zoneTiles,
     });
 
-    // 3. Place Businesses deterministically inside/adjacent to sector zone
-    // Sort businesses strictly by id for stability
+    // 3. Businesses: Landmark at district center, other businesses in supporting ring
     const sortedBiz = [...sec.businesses].sort((a, b) => a.id.localeCompare(b.id));
-
-    for (const biz of sortedBiz) {
-      // Find closest unassigned land tile to anchor
-      let chosenTile: { x: number; y: number } | null = null;
-      for (let r = 1; r < size; r++) {
-        for (let dy = -r; dy <= r; dy++) {
-          for (let dx = -r; dx <= r; dx++) {
-            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-            const bx = anchor.x + dx;
-            const by = anchor.y + dy;
-            if (bx >= 1 && bx < size - 1 && by >= 1 && by < size - 1) {
-              const key = `${bx},${by}`;
-              if (
-                terrain.tiles[by][bx] !== "water" &&
-                !occupiedTiles.has(key) &&
-                !roadMap.has(key)
-              ) {
-                chosenTile = { x: bx, y: by };
-                break;
-              }
-            }
-          }
-          if (chosenTile) break;
-        }
-        if (chosenTile) break;
+    for (let bIdx = 0; bIdx < sortedBiz.length; bIdx++) {
+      const biz = sortedBiz[bIdx];
+      const isLandmark = bIdx === 0;
+      let pos: { x: number; y: number };
+      if (isLandmark) {
+        pos = anchor;
+      } else {
+        const free = findFreeLandTile(anchor.x, anchor.y, terrain, occupiedTiles, roadMap, size);
+        pos = free ?? anchor;
       }
-
-      if (!chosenTile) {
-        // Fallback: any land tile
-        chosenTile = findNearestLand(anchor.x, anchor.y, terrain, occupiedTiles)!;
-      }
-
-      occupiedTiles.add(`${chosenTile.x},${chosenTile.y}`);
-
       const ruined = !biz.open || (biz.insolvent_steps ?? 0) > 0;
-
-      buildingList.push({
+      buildings.push({
         id: biz.id,
         name: biz.name,
         recipe: biz.recipe,
         sectorIdx: sec.idx,
-        tileX: chosenTile.x,
-        tileY: chosenTile.y,
+        tileX: pos.x,
+        tileY: pos.y,
         level: stageLevel,
         ruined,
         open: biz.open && !ruined,
+        isLandmark,
       });
     }
   }
 
-  // 4. Place Houses: count = f(population), approx population / 6, min 4, capped by land
-  const population = view.citizens?.population ?? 40;
-  const rawHouseCount = Math.floor(population / 6);
-  const targetHouses = Math.max(4, rawHouseCount);
-
-  const houses: HouseLayout[] = [];
-  let houseIndex = 0;
-
-  // Search in expanding rings from plaza along roadsides
-  for (let r = 1; r < size && houses.length < targetHouses; r++) {
-    for (let dy = -r; dy <= r && houses.length < targetHouses; dy++) {
-      for (let dx = -r; dx <= r && houses.length < targetHouses; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        const hx = plaza.x + dx;
-        const hy = plaza.y + dy;
-        if (hx >= 1 && hx < size - 1 && hy >= 1 && hy < size - 1) {
-          const key = `${hx},${hy}`;
-          if (
-            terrain.tiles[hy][hx] !== "water" &&
-            !occupiedTiles.has(key) &&
-            !roadMap.has(key)
-          ) {
-            occupiedTiles.add(key);
-            houses.push({
-              id: `house_${houseIndex}`,
-              tileX: hx,
-              tileY: hy,
-              level: Math.min(4, Math.max(1, stageLevel)),
-            });
-            houseIndex++;
-          }
+  // 4. Supporting Buildings per District (farm barns, ore shacks, forge chimneys, etc.)
+  const supportingBuildings: SupportingBuilding[] = [];
+  if (stageIndex >= 1) {
+    const countPerDistrict = stageIndex === 1 ? 2 : stageIndex === 2 ? 3 : 4;
+    for (const sec of sectors) {
+      const kinds = DISTRICT_SUPPORT_KINDS[sec.kind] ?? ["workshop", "shack"];
+      for (let i = 0; i < countPerDistrict; i++) {
+        const free = findFreeLandTile(sec.centerX, sec.centerY, terrain, occupiedTiles, roadMap, 5);
+        if (free) {
+          supportingBuildings.push({
+            id: `supp_${sec.idx}_${i}`,
+            sectorIdx: sec.idx,
+            kind: kinds[i % kinds.length],
+            tileX: free.x,
+            tileY: free.y,
+          });
         }
       }
     }
   }
 
-  const roads = Array.from(roadMap.values());
+  // 5. Distributed Houses along roads & across districts
+  const population = view.citizens?.population ?? 40;
+  const targetHouses = Math.max(4, Math.floor(population / 6));
+  const houses: HouseLayout[] = [];
+  const centralCount = Math.min(targetHouses, Math.max(2, Math.floor(targetHouses * 0.25)));
+
+  // Central ring houses around plaza
+  for (let i = 0; i < centralCount; i++) {
+    const free = findFreeLandTile(plaza.x, plaza.y, terrain, occupiedTiles, roadMap, size);
+    if (free) {
+      houses.push({
+        id: `house_c_${i}`,
+        tileX: free.x,
+        tileY: free.y,
+        level: Math.min(4, Math.max(1, stageLevel)),
+        districtIdx: -1,
+      });
+    }
+  }
+
+  // District houses distributed proportionally to open businesses
+  const remainingHouses = targetHouses - houses.length;
+  if (remainingHouses > 0 && sectors.length > 0) {
+    const weights = sectors.map((s) => {
+      const secData = view.sectors.find((v) => v.idx === s.idx);
+      const openCount = secData?.businesses.filter((b) => b.open && (b.insolvent_steps ?? 0) === 0).length ?? 0;
+      return Math.max(1, openCount);
+    });
+    const totalW = weights.reduce((a, b) => a + b, 0);
+
+    let allocated = 0;
+    for (let sIdx = 0; sIdx < sectors.length; sIdx++) {
+      const sec = sectors[sIdx];
+      const isLast = sIdx === sectors.length - 1;
+      const share = isLast
+        ? remainingHouses - allocated
+        : Math.max(1, Math.round(remainingHouses * (weights[sIdx] / totalW)));
+      const count = Math.min(remainingHouses - allocated, share);
+      allocated += count;
+
+      for (let j = 0; j < count; j++) {
+        const free = findFreeLandTile(sec.centerX, sec.centerY, terrain, occupiedTiles, roadMap, size);
+        if (free) {
+          houses.push({
+            id: `house_d_${sec.idx}_${j}`,
+            tileX: free.x,
+            tileY: free.y,
+            level: Math.min(4, Math.max(1, stageLevel)),
+            districtIdx: sec.idx,
+          });
+        }
+      }
+      if (allocated >= remainingHouses) break;
+    }
+  }
+
+  // 6. Central Market Plaza Stalls (count = in-stock commodities)
+  const marketStalls: MarketStall[] = [];
+  const inStock = (view.market || []).filter((m) => (m.stock ?? 0) > 0);
+  for (const item of inStock) {
+    const free = findFreeLandTile(plaza.x, plaza.y, terrain, occupiedTiles, roadMap, 6);
+    if (free) {
+      marketStalls.push({
+        id: `stall_${item.id}`,
+        itemId: item.id,
+        tileX: free.x,
+        tileY: free.y,
+      });
+    }
+  }
+
+  // 7. Rural Landscape Features near districts (farmland, orchards, fences, wells, ponds)
+  const ruralFeatures: RuralFeature[] = [];
+  const ruralCountPerSec = stageIndex === 0 ? 1 : stageIndex === 1 ? 2 : 3 + stageIndex;
+  for (const sec of sectors) {
+    for (let i = 0; i < ruralCountPerSec; i++) {
+      const free = findFreeLandTile(sec.centerX, sec.centerY, terrain, occupiedTiles, roadMap, 8);
+      if (free) {
+        ruralFeatures.push({
+          id: `rural_${sec.idx}_${i}`,
+          kind: RURAL_KINDS[(sec.idx + i) % RURAL_KINDS.length],
+          tileX: free.x,
+          tileY: free.y,
+        });
+      }
+    }
+  }
 
   return {
     sectors,
-    buildings: buildingList,
+    buildings,
     houses,
-    roads,
+    roads: Array.from(roadMap.values()),
     plaza,
+    supportingBuildings,
+    marketStalls,
+    ruralFeatures,
   };
 }

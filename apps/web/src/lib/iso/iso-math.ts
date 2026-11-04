@@ -67,11 +67,11 @@ export function screenToTile(
 }
 
 /**
- * Depth sort key based on isometric row index (x + y) and layer/elevation.
- * Lower keys draw behind higher keys.
+ * Depth sort key based on isometric row index (x + y), x coordinate tiebreaker, and layer/elevation.
+ * Lower keys draw behind higher keys. Stable for adjacent and same-row buildings.
  */
 export function depthSortKey(tileX: number, tileY: number, layer = 0): number {
-  return (tileX + tileY) * 100 + layer;
+  return (tileX + tileY) * 10000 + tileX * 10 + layer;
 }
 
 /**

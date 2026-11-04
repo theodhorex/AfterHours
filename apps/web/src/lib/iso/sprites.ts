@@ -91,6 +91,26 @@ export class IsoTextureManager {
     return this.propCache.getCartTexture(arcId, pal);
   }
 
+  getSupportingTexture(kind: string, arcId: string): Texture {
+    const pal = getArcPalette(arcId);
+    return this.propCache.getSupportingTexture(kind, arcId, pal);
+  }
+
+  getStallTexture(itemId: string, arcId: string): Texture {
+    const pal = getArcPalette(arcId);
+    return this.propCache.getStallTexture(itemId, arcId, pal);
+  }
+
+  getRuralTexture(kind: string, arcId: string): Texture {
+    const pal = getArcPalette(arcId);
+    return this.propCache.getRuralTexture(kind, arcId, pal);
+  }
+
+  getFountainTexture(arcId: string): Texture {
+    const pal = getArcPalette(arcId);
+    return this.propCache.getFountainTexture(arcId, pal);
+  }
+
   destroy(): void {
     this.groundCache.destroy();
     this.buildingCache.destroy();

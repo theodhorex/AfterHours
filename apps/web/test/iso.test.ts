@@ -4,6 +4,7 @@ import { isoToScreen, screenToIso, screenToTile, depthSortKey, calculateFitCamer
 import { generateTerrain } from "../src/lib/iso/terrain.ts";
 import { layoutCity } from "../src/lib/iso/layout.ts";
 import { generateRoadPaths, generateActors } from "../src/lib/iso/animation.ts";
+import { getStageTokens } from "../src/lib/iso/stage-tokens.ts";
 import { MOCK_CITY } from "../src/data/mock-city.ts";
 import type { CityView } from "../src/lib/sim-view.ts";
 
@@ -38,6 +39,34 @@ describe("Isometric City Logic", () => {
     const k3 = depthSortKey(10, 10, 1);
     assert.ok(k2 > k1, "Tile with greater (x+y) should have higher depth sort key");
     assert.ok(k3 > k1, "Higher elevation on same tile should have higher depth sort key");
+  });
+
+  it("sorted order is stable for adjacent buildings", () => {
+    // Check all adjacent tile neighbors (orthogonal and diagonal)
+    const center = { x: 12, y: 12 };
+    const neighbors = [
+      { x: 13, y: 12 }, // South-East (row+1)
+      { x: 12, y: 13 }, // South-West (row+1)
+      { x: 13, y: 11 }, // East (same row, different column)
+      { x: 11, y: 13 }, // West (same row, different column)
+      { x: 11, y: 12 }, // North-West (row-1)
+      { x: 12, y: 11 }, // North-East (row-1)
+    ];
+
+    const centerKey = depthSortKey(center.x, center.y, 1);
+    for (const n of neighbors) {
+      const neighborKey = depthSortKey(n.x, n.y, 1);
+      assert.notEqual(
+        centerKey,
+        neighborKey,
+        `Depth sort key must never collide for adjacent buildings at (${center.x},${center.y}) vs (${n.x},${n.y})`
+      );
+    }
+
+    // Two buildings with same x+y (e.g. (13, 11) and (11, 13)) must have deterministic strict ordering
+    const kA = depthSortKey(13, 11, 1);
+    const kB = depthSortKey(11, 13, 1);
+    assert.notEqual(kA, kB, "Same-row diagonal neighbors must have deterministic non-equal sort keys");
   });
 
   it("terrain determinism: same seed produces same grid, different seed differs", () => {
@@ -149,6 +178,166 @@ describe("Isometric City Logic", () => {
     const layout2 = layoutCity(terrain, mockView);
 
     assert.deepEqual(layout1, layout2);
+  });
+
+  it("all placed objects on distinct land tiles, none on water or roads", () => {
+    const terrain = generateTerrain("placed_objs_seed", "goblin_warrens", 48);
+    const layout = layoutCity(terrain, mockView);
+    const roadSet = new Set(layout.roads.map((r) => `${r.x},${r.y}`));
+
+    const allObjects = [
+      ...layout.buildings.map((b) => ({ id: b.id, x: b.tileX, y: b.tileY, kind: "building" })),
+      ...layout.houses.map((h) => ({ id: h.id, x: h.tileX, y: h.tileY, kind: "house" })),
+      ...layout.supportingBuildings.map((s) => ({ id: s.id, x: s.tileX, y: s.tileY, kind: "supporting" })),
+      ...layout.marketStalls.map((m) => ({ id: m.id, x: m.tileX, y: m.tileY, kind: "stall" })),
+      ...layout.ruralFeatures.map((r) => ({ id: r.id, x: r.tileX, y: r.tileY, kind: "rural" })),
+    ];
+
+    assert.ok(allObjects.length > 20, "Should have a substantial density of placed objects");
+
+    const occupied = new Set<string>();
+    for (const obj of allObjects) {
+      const key = `${obj.x},${obj.y}`;
+      assert.ok(!occupied.has(key), `Tile duplicate collision at ${key} for ${obj.id} (${obj.kind})`);
+      occupied.add(key);
+
+      const tileKind = terrain.tiles[obj.y][obj.x];
+      assert.notEqual(tileKind, "water", `Object ${obj.id} placed on water at ${key}`);
+      assert.ok(!roadSet.has(key), `Object ${obj.id} placed on road at ${key}`);
+    }
+  });
+
+  it("density grows with population and with stage", () => {
+    const terrain = generateTerrain("density_seed", "goblin_warrens", 48);
+
+    const viewHamlet: CityView = {
+      ...mockView,
+      stage_id: "hamlet",
+      stage_name: "Hamlet",
+      citizens: { ...mockView.citizens, population: 40 },
+    };
+    const viewVillage: CityView = {
+      ...mockView,
+      stage_id: "village",
+      stage_name: "Village",
+      citizens: { ...mockView.citizens, population: 120 },
+    };
+    const viewTown: CityView = {
+      ...mockView,
+      stage_id: "town",
+      stage_name: "Town",
+      citizens: { ...mockView.citizens, population: 450 },
+    };
+
+    const lHamlet = layoutCity(terrain, viewHamlet);
+    const lVillage = layoutCity(terrain, viewVillage);
+    const lTown = layoutCity(terrain, viewTown);
+
+    const countHamlet = lHamlet.houses.length + lHamlet.supportingBuildings.length + lHamlet.ruralFeatures.length;
+    const countVillage = lVillage.houses.length + lVillage.supportingBuildings.length + lVillage.ruralFeatures.length;
+    const countTown = lTown.houses.length + lTown.supportingBuildings.length + lTown.ruralFeatures.length;
+
+    assert.ok(countVillage > countHamlet, `Village density (${countVillage}) should exceed Hamlet (${countHamlet})`);
+    assert.ok(countTown > countVillage, `Town density (${countTown}) should exceed Village (${countVillage})`);
+  });
+
+  it("every district has at least its landmark and (at stage >= 1) supporting buildings", () => {
+    const terrain = generateTerrain("district_seed", "goblin_warrens", 48);
+
+    // Stage 0: Hamlet
+    const viewStage0: CityView = { ...mockView, stage_id: "hamlet", stage_name: "Hamlet" };
+    const lStage0 = layoutCity(terrain, viewStage0);
+    for (const sec of lStage0.sectors) {
+      const landmark = lStage0.buildings.find((b) => b.sectorIdx === sec.idx && b.isLandmark);
+      assert.ok(landmark, `District ${sec.name} must have a designated landmark at stage 0`);
+      assert.equal(landmark.tileX, sec.centerX);
+      assert.equal(landmark.tileY, sec.centerY);
+    }
+
+    // Stage 1+: Village
+    const lStage1 = layoutCity(terrain, mockView);
+    for (const sec of lStage1.sectors) {
+      const landmark = lStage1.buildings.find((b) => b.sectorIdx === sec.idx && b.isLandmark);
+      assert.ok(landmark, `District ${sec.name} must have a landmark at stage 1`);
+      const supporting = lStage1.supportingBuildings.filter((s) => s.sectorIdx === sec.idx);
+      assert.ok(
+        supporting.length >= 2,
+        `District ${sec.name} must have supporting buildings at stage >= 1, found ${supporting.length}`
+      );
+    }
+  });
+
+  it("houses are distributed over districts proportionally to open businesses plus central ring", () => {
+    const terrain = generateTerrain("house_dist_seed", "goblin_warrens", 48);
+    const viewLargePop: CityView = {
+      ...mockView,
+      citizens: { ...mockView.citizens, population: 300 },
+    };
+    const layout = layoutCity(terrain, viewLargePop);
+
+    // At least 3 different districts should have houses allocated
+    const districtHouseCounts = new Map<number, number>();
+    for (const h of layout.houses) {
+      if (h.districtIdx !== undefined) {
+        districtHouseCounts.set(h.districtIdx, (districtHouseCounts.get(h.districtIdx) ?? 0) + 1);
+      }
+    }
+
+    // Central ring + multiple districts
+    assert.ok(
+      districtHouseCounts.size >= 4,
+      `Houses should spread across multiple districts, found ${districtHouseCounts.size}`
+    );
+  });
+
+  it("market plaza stall count follows in-stock commodities", () => {
+    const terrain = generateTerrain("market_seed", "goblin_warrens", 48);
+    const layout = layoutCity(terrain, mockView);
+    const inStock = mockView.market.filter((m) => (m.stock ?? 0) > 0);
+
+    assert.equal(layout.marketStalls.length, inStock.length);
+  });
+
+  it("stage style tokens map visibly across at least 3 distinct steps", () => {
+    const s0 = getStageTokens("hamlet");
+    const s1 = getStageTokens("village");
+    const s2 = getStageTokens("town");
+    const s3 = getStageTokens("city");
+    const s4 = getStageTokens("grand_city");
+
+    // Stage 0: Hamlet
+    assert.equal(s0.stageIndex, 0);
+    assert.equal(s0.roadStyle, "dirt");
+    assert.equal(s0.hasDistrictWalls, false);
+    assert.equal(s0.hasBanners, false);
+    assert.equal(s0.hasPlazaFountain, false);
+
+    // Stage 1: Village
+    assert.equal(s1.stageIndex, 1);
+    assert.equal(s1.roadStyle, "cobble");
+    assert.equal(s1.hasDistrictWalls, false);
+    assert.equal(s1.hasPlazaFountain, false);
+
+    // Stage 2: Town
+    assert.equal(s2.stageIndex, 2);
+    assert.equal(s2.hasDistrictWalls, true);
+    assert.equal(s2.hasBanners, true);
+    assert.equal(s2.hasPlazaFountain, false);
+
+    // Stage 3+: City / Grand City
+    assert.equal(s3.stageIndex, 3);
+    assert.equal(s3.hasDistrictWalls, true);
+    assert.equal(s3.hasBanners, true);
+    assert.equal(s3.hasPlazaFountain, true);
+    assert.equal(s3.landmarkTier, 2);
+
+    assert.equal(s4.hasPlazaFountain, true);
+
+    // Tokens must differ in at least 3 steps
+    const step0to1Diff = (s0.roadStyle as string) !== (s1.roadStyle as string);
+    const step1to2Diff = (s1.hasDistrictWalls as boolean) !== (s2.hasDistrictWalls as boolean);
+    const step2to3Diff = (s2.hasPlazaFountain as boolean) !== (s3.hasPlazaFountain as boolean);
+    assert.ok(step0to1Diff && step1to2Diff && step2to3Diff, "Tokens must visibly differ across steps");
   });
 
   it("shade variant determinism and range: returns deterministic variant in [0, variants-1]", () => {
