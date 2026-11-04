@@ -58,6 +58,7 @@ impl AfterHours {
         );
         validate_city_id(&city_id);
         require!(!self.cities.contains_key(&city_id), "DUPLICATE_CITY_ID");
+        require!(self.arcs.contains_key(&arc_id), "UNREGISTERED_ARC");
         crate::mt::validate_receiver_id(&owner);
 
         require!(is_valid_hex_64(&state_root), "INVALID_STATE_ROOT");

@@ -1,6 +1,6 @@
 //! AfterHours smart contract: city registry, NEP-245 multi-token, and checkpoint verification.
 
-use near_sdk::store::LookupMap;
+use near_sdk::store::{LookupMap, LookupSet};
 use near_sdk::{env, near, require, AccountId, PanicOnDefault};
 
 pub mod constants {
@@ -9,9 +9,11 @@ pub mod constants {
     pub const MAX_STAGE: u8 = 4;
 }
 
+pub mod checkpoint;
 pub mod city;
 pub mod mt;
 
+pub use checkpoint::{ArcCaps, Checkpoint, CoinFlow, ItemFlow, PlayerDelta};
 pub use city::CityRecord;
 
 const EVENT_STANDARD: &str = "afterhours";
@@ -36,6 +38,8 @@ pub struct AfterHours {
     pub supply: LookupMap<String, u128>,
     pub tokens_for_owner: LookupMap<AccountId, Vec<String>>,
     pub cities: LookupMap<String, CityRecord>,
+    pub arcs: LookupMap<String, ArcCaps>,
+    pub executed_orders: LookupSet<String>,
 }
 
 #[near]
@@ -50,6 +54,8 @@ impl AfterHours {
             supply: LookupMap::new(b"s"),
             tokens_for_owner: LookupMap::new(b"t"),
             cities: LookupMap::new(b"c"),
+            arcs: LookupMap::new(b"a"),
+            executed_orders: LookupSet::new(b"e"),
         }
     }
 
@@ -77,3 +83,5 @@ impl AfterHours {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod checkpoint_tests;

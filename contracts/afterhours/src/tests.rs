@@ -305,6 +305,7 @@ fn test_create_city_happy_path() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     create_default_city(&mut contract, "neo-tokyo_01.a");
 
     let city = contract.get_city("neo-tokyo_01.a".to_string()).expect("City should exist");
@@ -345,6 +346,7 @@ fn test_create_city_duplicate_id_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     create_default_city(&mut contract, "city-1");
     create_default_city(&mut contract, "city-1");
 }
@@ -356,6 +358,7 @@ fn test_create_city_id_too_long_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     let long_id = "a".repeat(65);
     create_default_city(&mut contract, &long_id);
 }
@@ -367,6 +370,7 @@ fn test_create_city_id_invalid_chars_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     create_default_city(&mut contract, "City_UpperCase!");
 }
 
@@ -377,6 +381,7 @@ fn test_create_city_id_empty_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     create_default_city(&mut contract, "");
 }
 
@@ -387,6 +392,7 @@ fn test_create_city_state_root_length_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     let totals = std::collections::BTreeMap::new();
     contract.create_city(
         "city-1".to_string(),
@@ -408,6 +414,7 @@ fn test_create_city_state_root_non_hex_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     let bad_hex = "z".repeat(64);
     let totals = std::collections::BTreeMap::new();
     contract.create_city(
@@ -430,6 +437,7 @@ fn test_create_city_city_root_length_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     let totals = std::collections::BTreeMap::new();
     contract.create_city(
         "city-1".to_string(),
@@ -451,6 +459,7 @@ fn test_create_city_city_root_non_hex_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     let bad_hex = "x".repeat(64);
     let totals = std::collections::BTreeMap::new();
     contract.create_city(
@@ -473,6 +482,7 @@ fn test_create_city_parent_root_invalid_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     let totals = std::collections::BTreeMap::new();
     contract.create_city(
         "city-1".to_string(),
@@ -494,6 +504,7 @@ fn test_create_city_too_many_totals_items_fails() {
     let mut contract = AfterHours::new(acc("operator.testnet"));
 
     set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
     let mut totals = std::collections::BTreeMap::new();
     for i in 0..33 {
         totals.insert(format!("item_{i}"), U128(1));
@@ -510,3 +521,98 @@ fn test_create_city_too_many_totals_items_fails() {
         U128(100),
     );
 }
+
+fn register_default_arc(contract: &mut AfterHours, arc_id: &str) {
+    let mut produce = std::collections::BTreeMap::new();
+    produce.insert("bread".to_string(), U128(10));
+    let mut consume = std::collections::BTreeMap::new();
+    consume.insert("bread".to_string(), U128(10));
+    contract.register_arc(arc_id.to_string(), produce, consume);
+}
+
+#[test]
+fn test_register_arc_happy_path() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+
+    let arc = contract.get_arc("arc_1".to_string()).expect("Arc should exist");
+    assert_eq!(arc.arc_id, "arc_1");
+    assert_eq!(arc.produce_cap_per_step.get("bread"), Some(&U128(10)));
+    assert_eq!(arc.consume_cap_per_step.get("bread"), Some(&U128(10)));
+
+    let logs = get_logs();
+    assert!(logs.iter().any(|l| l.contains("\"event\":\"arc_registered\"") && l.contains("arc_1")));
+}
+
+#[test]
+#[should_panic(expected = "UNAUTHORIZED_OPERATOR")]
+fn test_register_arc_unauthorized() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller("stranger.testnet");
+    register_default_arc(&mut contract, "arc_1");
+}
+
+#[test]
+#[should_panic(expected = "DUPLICATE_ARC_ID")]
+fn test_register_arc_duplicate_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+    register_default_arc(&mut contract, "arc_1");
+}
+
+#[test]
+#[should_panic(expected = "INVALID_ARC_ID")]
+fn test_register_arc_invalid_id_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "Invalid_Arc_ID!");
+}
+
+#[test]
+#[should_panic(expected = "INVALID_ITEM_ID")]
+fn test_register_arc_invalid_item_id_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller("operator.testnet");
+    let mut produce = std::collections::BTreeMap::new();
+    produce.insert("BAD_ITEM!".to_string(), U128(10));
+    let consume = std::collections::BTreeMap::new();
+    contract.register_arc("arc_1".to_string(), produce, consume);
+}
+
+#[test]
+#[should_panic(expected = "TOO_MANY_ITEMS")]
+fn test_register_arc_too_many_items_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller("operator.testnet");
+    let mut produce = std::collections::BTreeMap::new();
+    for i in 0..33 {
+        produce.insert(format!("item_{i}"), U128(1));
+    }
+    let consume = std::collections::BTreeMap::new();
+    contract.register_arc("arc_1".to_string(), produce, consume);
+}
+
+#[test]
+#[should_panic(expected = "UNREGISTERED_ARC")]
+fn test_create_city_unregistered_arc_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    set_caller("operator.testnet");
+    create_default_city(&mut contract, "city-1");
+}
+
