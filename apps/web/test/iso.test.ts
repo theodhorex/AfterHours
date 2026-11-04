@@ -1,8 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isoToScreen, screenToIso, screenToTile, depthSortKey } from "../src/lib/iso/iso-math.ts";
+import { isoToScreen, screenToIso, screenToTile, depthSortKey, calculateFitCamera, isClick, getTileVariant } from "../src/lib/iso/iso-math.ts";
 import { generateTerrain } from "../src/lib/iso/terrain.ts";
 import { layoutCity } from "../src/lib/iso/layout.ts";
+import { generateRoadPaths, generateActors } from "../src/lib/iso/animation.ts";
 import { MOCK_CITY } from "../src/data/mock-city.ts";
 import type { CityView } from "../src/lib/sim-view.ts";
 
@@ -148,5 +149,110 @@ describe("Isometric City Logic", () => {
     const layout2 = layoutCity(terrain, mockView);
 
     assert.deepEqual(layout1, layout2);
+  });
+
+  it("shade variant determinism and range: returns deterministic variant in [0, variants-1]", () => {
+    // Deterministic check
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 10; x++) {
+        const v1 = getTileVariant(x, y, 3);
+        const v2 = getTileVariant(x, y, 3);
+        assert.equal(v1, v2, `Mismatch at (${x}, ${y})`);
+        assert.ok(v1 >= 0 && v1 < 3, `Variant out of range: ${v1}`);
+      }
+    }
+
+    // Spread check: all variants appear across sample coordinates
+    const seen = new Set<number>();
+    for (let i = 0; i < 40; i++) {
+      seen.add(getTileVariant(i, i * 2 + 1, 3));
+    }
+    assert.equal(seen.size, 3, "All 3 variants should appear across sample coordinates");
+  });
+
+  it("click-vs-drag threshold helper: isClick is true only within threshold", () => {
+    assert.equal(isClick(0, 0, 4), true);
+    assert.equal(isClick(2, 3, 4), true); // 4 + 9 = 13 <= 16
+    assert.equal(isClick(4, 0, 4), true); // 16 <= 16
+    assert.equal(isClick(3, 3, 4), false); // 9 + 9 = 18 > 16
+    assert.equal(isClick(0, 5, 4), false);
+    assert.equal(isClick(-4, 0, 4), true);
+    assert.equal(isClick(-4, -1, 4), false);
+  });
+
+  it("bounding-box fit math: zoom fits all buildings inside the viewport with padding", () => {
+    const terrain = generateTerrain("fit_seed", "goblin_warrens", 48);
+    const layout = layoutCity(terrain, mockView);
+    const points = layout.buildings.map((b) => ({ x: b.tileX, y: b.tileY }));
+    const vw = 860;
+    const vh = 540;
+    const pad = 40;
+
+    const cam = calculateFitCamera(points, {
+      viewportWidth: vw,
+      viewportHeight: vh,
+      padding: pad,
+      minZoom: 0.4,
+      maxZoom: 3.0,
+    });
+
+    assert.ok(cam.zoom >= 0.4 && cam.zoom <= 3.0, `Zoom ${cam.zoom} should be within limits`);
+
+    // Verify all points project within [pad, vw - pad] and [pad, vh - pad]
+    for (const pt of points) {
+      const scr = isoToScreen(pt.x, pt.y);
+      const projX = scr.x * cam.zoom + cam.x;
+      const projY = scr.y * cam.zoom + cam.y;
+
+      assert.ok(
+        projX >= pad - 1 && projX <= vw - pad + 1,
+        `Point (${pt.x}, ${pt.y}) projected x=${projX} outside [${pad}, ${vw - pad}]`
+      );
+      assert.ok(
+        projY >= pad - 1 && projY <= vh - pad + 1,
+        `Point (${pt.x}, ${pt.y}) projected y=${projY} outside [${pad}, ${vh - pad}]`
+      );
+    }
+  });
+
+  it("person/cart path generation is deterministic and stays on road tiles", () => {
+    const terrain = generateTerrain("path_seed", "goblin_warrens", 40);
+    const layout = layoutCity(terrain, mockView);
+    const roadSet = new Set(layout.roads.map((r) => `${r.x},${r.y}`));
+
+    const paths1 = generateRoadPaths(layout.roads, layout.plaza, layout.buildings);
+    const paths2 = generateRoadPaths(layout.roads, layout.plaza, layout.buildings);
+
+    assert.deepEqual(paths1, paths2, "Path generation must be deterministic");
+    assert.ok(paths1.length > 0, "Must generate at least one path");
+
+    for (const path of paths1) {
+      assert.ok(path.length >= 2, "Path must have at least 2 waypoints");
+      for (const pt of path) {
+        assert.ok(
+          roadSet.has(`${pt.x},${pt.y}`),
+          `Path waypoint (${pt.x}, ${pt.y}) must be on a road tile`
+        );
+      }
+    }
+  });
+
+  it("the cap on mobile counts: never exceeds 40 even with massive population or open businesses", () => {
+    const terrain = generateTerrain("actor_seed", "goblin_warrens", 40);
+    const layout = layoutCity(terrain, mockView);
+
+    // Normal case
+    const actorsNormal = generateActors(layout.roads, layout.plaza, layout.buildings, 50, 10);
+    assert.ok(actorsNormal.length >= 4, "Should have minimum actors");
+    assert.ok(actorsNormal.length <= 40, "Must be capped at 40");
+
+    // Extreme case: 10,000 population, 200 businesses
+    const actorsExtreme = generateActors(layout.roads, layout.plaza, layout.buildings, 10000, 200);
+    assert.equal(actorsExtreme.length, 40, "Must be strictly capped at 40");
+
+    // Zero population/business case
+    const actorsEmpty = generateActors(layout.roads, layout.plaza, layout.buildings, 0, 0);
+    assert.ok(actorsEmpty.length >= 2, "Should have minimum ambient actors");
+    assert.ok(actorsEmpty.length <= 40);
   });
 });

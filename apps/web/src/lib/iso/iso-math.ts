@@ -102,3 +102,72 @@ export function getMapScreenBounds(
     height: maxY - minY,
   };
 }
+
+/**
+ * Deterministic hash of integer tile coordinates returning a variant index [0..variants-1].
+ */
+export function getTileVariant(x: number, y: number, variants = 3): number {
+  let h = (x * 374761393 + y * 668265263) ^ 0x5bf03635;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return Math.abs((h ^ (h >>> 16)) % variants);
+}
+
+/**
+ * Helper to determine if a pointer movement qualifies as a click vs drag.
+ */
+export function isClick(dx: number, dy: number, threshold = 4): boolean {
+  return dx * dx + dy * dy <= threshold * threshold;
+}
+
+export interface FitCameraOptions {
+  viewportWidth: number;
+  viewportHeight: number;
+  padding?: number;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
+/**
+ * Calculates camera (x, y, zoom) to center and fit a set of tile points into the viewport.
+ */
+export function calculateFitCamera(
+  points: Array<{ x: number; y: number }>,
+  options: FitCameraOptions
+): { x: number; y: number; zoom: number } {
+  const { viewportWidth, viewportHeight, padding = 40, minZoom = 0.4, maxZoom = 3.0 } = options;
+
+  if (points.length === 0) {
+    return { x: viewportWidth / 2, y: viewportHeight / 2, zoom: 1.0 };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (const pt of points) {
+    const scr = isoToScreen(pt.x, pt.y);
+    if (scr.x < minX) minX = scr.x;
+    if (scr.x > maxX) maxX = scr.x;
+    if (scr.y < minY) minY = scr.y;
+    if (scr.y > maxY) maxY = scr.y;
+  }
+
+  const halfW = TILE_WIDTH / 2;
+  const halfH = TILE_HEIGHT / 2;
+  const boxW = Math.max(1, (maxX - minX) + halfW * 2);
+  const boxH = Math.max(1, (maxY - minY) + halfH * 2);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  const availW = Math.max(20, viewportWidth - padding * 2);
+  const availH = Math.max(20, viewportHeight - padding * 2);
+
+  const rawZoom = Math.min(availW / boxW, availH / boxH);
+  const zoom = Math.max(minZoom, Math.min(maxZoom, Math.round(rawZoom * 100) / 100));
+
+  const x = Math.round(viewportWidth / 2 - centerX * zoom);
+  const y = Math.round(viewportHeight / 2 - centerY * zoom);
+
+  return { x, y, zoom };
+}

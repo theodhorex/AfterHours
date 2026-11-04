@@ -204,26 +204,27 @@ export default function CityViewPage() {
           </div>
         )}
 
-        {/* Primary Content Grid */}
+        {/* Primary Content: Wide Hero Isometric City Canvas, then District & Market Grid */}
         {cityView && !activeError && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left / Primary Column: Isometric City View & District Detail */}
-            <div className="lg:col-span-7 space-y-6">
-              <IsoCity
-                city={cityView}
-                selectedIdx={selectedIdx}
-                onSelectSector={setSelectedIdx}
-                seed={seed}
-              />
+          <div className="space-y-6">
+            <IsoCity
+              city={cityView}
+              selectedIdx={selectedIdx}
+              onSelectSector={setSelectedIdx}
+              seed={seed}
+            />
 
-              {selectedSector && <DistrictDetail sector={selectedSector} />}
-            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: District Detail */}
+              <div className="lg:col-span-7 space-y-6">
+                {selectedSector && <DistrictDetail sector={selectedSector} />}
+              </div>
 
-            {/* Right / Secondary Column: Market Panel & Chronicle List */}
-            <div className="lg:col-span-5 space-y-6">
-              <MarketPanel items={cityView.market} />
-
-              <ChronicleList events={cityView.chronicle} />
+              {/* Right Column: Market Panel & Chronicle List */}
+              <div className="lg:col-span-5 space-y-6">
+                <MarketPanel items={cityView.market} />
+                <ChronicleList events={cityView.chronicle} />
+              </div>
             </div>
           </div>
         )}

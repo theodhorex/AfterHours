@@ -67,16 +67,34 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
 ---
 
 ## 7. Isometric City View (Procedural Living World)
-- **Visual Style**: Top-down angled 2:1 isometric grid (64x32px tiles), inspired by procedural simulation aesthetics without copying any proprietary game art.
+- **Visual Style**: Top-down angled 2:1 isometric grid (64x32px tiles), wide 16:10 hero framing (min 420px height, responsive 360px floor), inspired by TheoTown-style procedural simulation aesthetics without copying any proprietary game art.
 - **Arc Palette Themes**:
-  - `goblin_warrens`: Damp cavern stone (`#2b241d`), dark timber (`#1f1b16`), and ember beacon lights (`#f07f4f`).
-  - `cave_hold`: Earthy mud huts (`#30251c`), dark stone (`#231a13`), and bone/hearth amber highlights (`#e5b358`).
-  - `dino_vale`: Primordial swamp green (`#3b5229`), amber fossil highlights (`#d48a37`), and river wetlands.
-  - `elf_grove`: Pale ancient wood (`#50493f`), silver leaf highlights (`#8ec3b0`), and starlight blues (`#23576e`).
-- **Accessibility & Keyboard Parity**:
-  - Main canvas viewport carries `role="img"` and descriptive `aria-label` summarizing settlement name, year, population, open establishments, and insolvent shops.
-  - Dedicated interactive district selection list below canvas offers full keyboard navigation parity with focus rings.
-  - Screen controls provide explicit, accessible zoom-in, zoom-out, and recenter `<button>` elements.
-- **Motion & Resource Discipline**:
-  - Strictly respects `prefers-reduced-motion`: When active, ticker loops and particle emissions (chimney smoke, water shimmer) are completely stopped.
-  - Pre-renders procedural sprites into reusable textures (`generateTexture`) to avoid per-frame redraw bottlenecks.
+  - `goblin_warrens`: Mossy vibrant green ground (`#4c6632`, 3 shade variants), damp grey stone (`#55585e`), amber lantern light (`#f59e0b`), deep slate water (`#265f7c`) with cyan foam shores (`#64b4d6`).
+  - `cave_hold`: Warm tans and ochre ground (`#8a6842`, 3 shade variants), clay and bone stone (`#69594d`), warm gold hearth accents (`#e5b358`), subterranean river (`#25566c`).
+  - `dino_vale`: Lush swamp greens (`#387d2f`, 3 shade variants), rich teal water (`#1b7d75`) with foam trim (`#42cfc2`), amber and orange accents (`#eb8828` / `#f39c12`), ancient flagstone roads.
+  - `elf_grove`: Fresh light greens (`#4f9c52`, 3 shade variants), silver quartz stone (`#6a7880`), silver leaf and moon-blue water (`#2b78ad`), pale arched wood.
+- **Terrain & Ground Detail**:
+  - Ground tiles feature 3 deterministic coordinate-hash shade variants, wildflower/grass tuft micro-props, sand shorelines along water edges, and road tiles with distinct curb edge lines and corner/T-junction connectivity.
+  - Three distinct procedural tree types (conifer, broadleaf, slender fantasy birch) with soft drop shadow ellipses.
+- **Architectural Character & Landmarks**:
+  - Residential houses: 4 deterministic arc-specific architectural variants with warm lit windows and progressive stage-level expansions (wings, upper floors, dormers).
+  - Unmistakable Sector Landmarks:
+    - `food` (Farm): Red/timber gambrel barn, tall grain silo, crop furrow rows, and spinning windmill.
+    - `ore` (Mine): Heavy timber A-frame headframe portal, ore cart on iron rails, and mineral rock mounds.
+    - `forge` (Smithy): Heavy stone smithy with huge industrial chimney stack and blazing furnace mouth.
+    - `alchemy` (Lab): Cylindrical stone tower with bubbling translucent glass observation dome and copper pipes.
+    - `harbor` (Port): Broad wooden pier wharf, moored cargo boat hull with mast, and timber crane derrick.
+    - `tower` (Citadel): Tall tapering municipal spire with battlements, waving pennant, and glowing arcane apex beacon.
+  - Ruined variants: Distinct collapsed silhouette with jagged broken roofs, leaning splintered timbers, no window light, and red structural distress marks.
+- **Living City Motion Rules**:
+  - Ambient life animations include chimney smoke rising from active workshops and houses, gentle swaying treetops, water shimmer, and walking citizens and merchant carts traversing the road network.
+  - Traffic counts scale with population and active businesses, capped strictly at 40 mobile actors for predictable load.
+  - Motion is strictly governed by `prefers-reduced-motion`: When active, the ticker completely stops and all objects remain static.
+- **Performance Discipline (60 FPS Target)**:
+  - Procedural sprites are generated once into reusable textures via `IsoTextureManager` (cached by kind, arc, variant, and connection mask).
+  - Pre-allocated sprite pools for actors and particle effects; strictly zero object allocation or graphics recreation per animation frame.
+- **Accessibility & Contrast**:
+  - Canvas carry `role="img"` with live descriptive `aria-label` detailing settlement name, year, population, open shops, and ruined counts.
+  - Full keyboard parity via tab-navigable municipal district button list with 2px gold focus rings.
+  - Interactive click-vs-drag protection: panning movements (>4px threshold) never inadvertently select buildings or sectors.
+  - Hover and selection badge plates utilize opaque charred canvas backing (`#12100e`) ensuring AAA text contrast (15.3:1).

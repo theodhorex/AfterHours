@@ -6,7 +6,7 @@ import type { CityView } from "../lib/sim-view.ts";
 import { generateTerrain } from "../lib/iso/terrain.ts";
 import { layoutCity, type CityLayout } from "../lib/iso/layout.ts";
 import { IsoCityScene } from "../lib/iso/render.ts";
-import { isoToScreen } from "../lib/iso/iso-math.ts";
+import { calculateFitCamera } from "../lib/iso/iso-math.ts";
 
 export interface IsoCityProps {
   city: CityView;
@@ -15,8 +15,8 @@ export interface IsoCityProps {
   seed?: string;
 }
 
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 2.2;
+const MIN_ZOOM = 0.35;
+const MAX_ZOOM = 3.0;
 
 function clampZoom(z: number): number {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(z * 100) / 100));
@@ -65,11 +65,20 @@ export function IsoCity({
     return { totalOpen: open, totalClosed: closed };
   }, [city.sectors]);
 
-  const terrain = useMemo(() => generateTerrain(seed, city.arc_id, 48), [seed, city.arc_id]);
+  const terrain = useMemo(() => generateTerrain(seed, city.arc_id, 40), [seed, city.arc_id]);
   const layout: CityLayout = useMemo(() => layoutCity(terrain, city), [terrain, city]);
   const layoutRef = useRef(layout);
   useEffect(() => {
     layoutRef.current = layout;
+  }, [layout]);
+
+  const builtPoints = useMemo(() => {
+    return [
+      layout.plaza,
+      ...layout.buildings.map((b) => ({ x: b.tileX, y: b.tileY })),
+      ...layout.houses.map((h) => ({ x: h.tileX, y: h.tileY })),
+      ...layout.sectors.map((s) => ({ x: s.centerX, y: s.centerY })),
+    ];
   }, [layout]);
 
   const applyCamera = useCallback((x: number, y: number, zoom: number) => {
@@ -80,13 +89,17 @@ export function IsoCity({
 
   const recenter = useCallback(() => {
     const el = containerRef.current;
-    const w = el?.clientWidth ?? 860;
+    const w = el?.clientWidth ?? 960;
     const h = el?.clientHeight ?? 540;
-    const plaza = isoToScreen(layoutRef.current.plaza.x, layoutRef.current.plaza.y);
-    // Fit the 48x48 map reasonably on narrow screens; never below MIN_ZOOM.
-    const zoom = clampZoom(Math.min(1, w / 700));
-    applyCamera(Math.round(w / 2 - plaza.x * zoom), Math.round(h / 2 - plaza.y * zoom), zoom);
-  }, [applyCamera]);
+    const cam = calculateFitCamera(builtPoints, {
+      viewportWidth: w,
+      viewportHeight: h,
+      padding: Math.max(32, Math.min(w * 0.08, 64)),
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+    });
+    applyCamera(cam.x, cam.y, cam.zoom);
+  }, [builtPoints, applyCamera]);
 
   // Zoom around the viewport center
   const zoomBy = useCallback(
@@ -254,6 +267,15 @@ export function IsoCity({
           <button
             type="button"
             onClick={() => recenter()}
+            aria-label="Fit built city to view"
+            title="Fit city in view"
+            className="atlas-focus px-2.5 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"
+          >
+            Fit
+          </button>
+          <button
+            type="button"
+            onClick={() => recenter()}
             aria-label="Recenter map view"
             title="Recenter map"
             className="atlas-focus px-2.5 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"
@@ -273,16 +295,18 @@ export function IsoCity({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="w-full relative aspect-[860/540] min-h-[300px] max-h-[540px] bg-atlas-canvas rounded overflow-hidden select-none border border-atlas-line"
+        className="w-full relative aspect-[4/3] sm:aspect-[16/10] min-h-[420px] max-h-[640px] bg-atlas-canvas rounded overflow-hidden select-none border border-atlas-line"
       />
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-mono text-atlas-ink-muted bg-atlas-canvas/60 px-3 py-2 rounded border border-atlas-line">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#3d3429] border border-atlas-line" /><span>House</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atlas-ember border border-atlas-gold" /><span>Workshop (Open)</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atlas-alert/40 border border-atlas-alert flex items-center justify-center text-[8px] text-atlas-alert font-bold">✕</span><span>Ruined / Insolvent</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#4a3f32] border border-[#2d2720]" /><span>Cobblestone / Bridge</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#22485a] border border-[#16313e]" /><span>River</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#42382c] border border-atlas-gold flex items-center justify-center text-[7px] text-atlas-gold">▪</span><span>House (Lit)</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-atlas-ember border border-atlas-gold" /><span>Landmark (Open)</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-atlas-alert/30 border border-atlas-alert flex items-center justify-center text-[8px] text-atlas-alert font-bold">✕</span><span>Ruined</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#5a5142] border border-[#363026]" /><span>Paved Road</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#265f7c] border border-[#64b4d6]" /><span>River & Shore</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#284720] border border-[#4c6632]" /><span>Trees</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atlas-gold/80 border border-atlas-ink" /><span>Citizen / Cart</span></span>
       </div>
 
       {/* Keyboard-accessible sector list below canvas */}
