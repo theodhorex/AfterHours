@@ -29,6 +29,7 @@
 |---|---|
 | Data contract (arcs, checkpoint shape, caravans, world runner) | [`docs/data-contract.md`](docs/data-contract.md) |
 | Web design notes (arc themes, bubbles, daylight rule) | [`apps/web/DESIGN.md`](apps/web/DESIGN.md) |
+| AI assistance and libraries (Q-005) | [`docs/AI_AND_LIBRARIES.md`](docs/AI_AND_LIBRARIES.md) |
 | Contract source | [`contracts/afterhours/src`](contracts/afterhours/src) |
 | Simulation source | [`packages/sim/src`](packages/sim/src) |
 
@@ -171,10 +172,23 @@ docs/        data contract
 - [x] First testnet city with matching root
 - [ ] Economy tuning: some cities stall or collapse on some seeds (engine fix in progress)
 - [ ] Republish four cities to the v2 contract with a transaction table
-- [ ] Production `next build` proven green on a clean machine
+- [x] Production `next build` proven green from a clean copy of the repository (2026-11-04)
+- [ ] Independent contract security review (in progress) and web accessibility pass (in progress)
 - [ ] Contract-side caravan settlement (today caravans are checked per city only)
 
 **One limitation worth naming:** the operator is trusted for availability, ordering and fairness of orders, not for conservation or history. City sales are paid in NEAR on testnet, not in game coin, and the sale price is not part of the replayed economy.
+
+## Progress Log
+
+Updated after each accepted milestone.
+
+| Date | Milestone |
+|---|---|
+| 2026-11-04 | Repo started. Deterministic simulation, conservation, checkpoints, replay verifier, contract with NEP-245 style balances |
+| 2026-11-04 | First testnet city: on-chain state root matched the local replay at step 200 |
+| 2026-11-04 | City market (`list_city`, `buy_city`), TS vs Rust differential tests, browser Audit against the NEAR root |
+| 2026-11-04 | Four arc themes, icon bubbles, inter-city caravans (library, world runner, web panel), clean production build |
+| 2026-11-04 | In progress: growth engine fix for stalled cities, contract security review, accessibility pass, republish of four cities |
 
 ## Hackathon Notes
 
