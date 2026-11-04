@@ -2,11 +2,11 @@
  * UI Badges and District territorial halos for PixiJS v8 isometric scene.
  */
 
-import { Container, Graphics, Text, TextStyle, type Renderer, type Texture, Sprite } from "pixi.js";
+import { Container, Graphics, Text, TextStyle, type Renderer, type Texture, Sprite, Rectangle } from "pixi.js";
 import { isoToScreen, isClick } from "./iso-math.ts";
 import type { CityLayout, BuildingLayout } from "./layout.ts";
 import type { IsoSceneCallbacks } from "./render.ts";
-import type { Bubble, BubbleGlyph } from "./bubbles.ts";
+import { type Bubble, type BubbleGlyph, BUBBLE_HIT_WIDTH, BUBBLE_HIT_HEIGHT } from "./bubbles.ts";
 
 export function drawDistrictHighlights(
   zoneLayer: Container,
@@ -86,53 +86,64 @@ export function makeBuildingBadge(
 }
 
 /**
- * Draws pixel-art speech bubble with 1px dark border and glyph inside.
+ * Draws pixel-art speech bubble scaled ~1.5x with subtle white halo,
+ * clear 1px dark border, and readable glyphs inside.
+ * Hit area is at least 24x24 screen px (scaled to 28x32px).
  */
 export function drawBubbleGraphics(g: Graphics, glyph: BubbleGlyph): void {
-  // Speech bubble base: 18x14 rounded box with bottom pointer
-  // Dark 1px outline
-  const outline = 0x16120e;
-  const bubbleFill = 0xf4efe6; // Warm illuminated parchment
-
-  // Bubble body polygon with pointer
+  // 1. Subtle white halo for contrast against dark / saturated terrain
   g.poly([
-    -9, -21,
-    9, -21,
-    9, -7,
-    3, -7,
-    0, -3,
-    -2, -7,
-    -9, -7,
+    -15.5, -32.5,
+    15.5, -32.5,
+    15.5, -9,
+    4.5, -9,
+    0, -1,
+    -3.5, -9,
+    -15.5, -9,
+  ]).fill({ color: 0xffffff, alpha: 0.45 });
+
+  // 2. Main speech bubble base: ~28x21 box with pointer down to -2.5
+  const outline = 0x16120e;
+  const bubbleFill = 0xf5efe6; // Warm illuminated parchment
+
+  g.poly([
+    -14, -31,
+    14, -31,
+    14, -10,
+    3.5, -10,
+    0, -2.5,
+    -2.5, -10,
+    -14, -10,
   ])
     .fill({ color: bubbleFill })
     .stroke({ color: outline, width: 1 });
 
-  // Draw glyph inside bubble (center ~ x: 0, y: -14)
+  // 3. Draw readable glyph inside bubble (center at x: 0, y: -20.5)
   if (glyph === "bread") {
-    // Bread loaf: warm crust and crumb
-    g.ellipse(0, -14, 5, 3).fill({ color: 0xd97706 }).stroke({ color: 0x78350f, width: 0.75 });
-    g.rect(-2, -15, 1, 2).fill({ color: 0xfef3c7 });
-    g.rect(1, -15, 1, 2).fill({ color: 0xfef3c7 });
+    // Bread loaf: warm crust and crumb, 1.5x scaled
+    g.ellipse(0, -20.5, 7.5, 4.5).fill({ color: 0xd97706 }).stroke({ color: 0x78350f, width: 1 });
+    g.rect(-3.5, -22, 1.5, 3).fill({ color: 0xfef3c7 });
+    g.rect(1.5, -22, 1.5, 3).fill({ color: 0xfef3c7 });
   } else if (glyph === "zzz") {
-    // Zzz: deep slate
+    // Zzz: deep slate bold readable typography
     const style = new TextStyle({
       fontFamily: "monospace",
-      fontSize: 8,
+      fontSize: 11,
       fontWeight: "bold",
-      fill: 0x475569,
+      fill: 0x334155,
     });
     const zText = new Text({ text: "Zz", style });
     zText.anchor.set(0.5, 0.5);
-    zText.position.set(0, -14);
+    zText.position.set(0, -20.5);
     g.addChild(zText);
   } else if (glyph === "exclamation") {
-    // Exclamation mark: vivid amber/red
-    g.rect(-1, -18, 2, 5).fill({ color: 0xdc2626 });
-    g.circle(0, -10.5, 1).fill({ color: 0xdc2626 });
+    // Exclamation mark: vivid crimson/red
+    g.rect(-1.5, -26.5, 3, 7.5).fill({ color: 0xdc2626 });
+    g.circle(0, -15, 1.6).fill({ color: 0xdc2626 });
   } else if (glyph === "coin") {
-    // Coin: gold coin with inner shine
-    g.circle(0, -14, 4).fill({ color: 0xf59e0b }).stroke({ color: 0x92400e, width: 0.75 });
-    g.circle(0, -14, 1.5).fill({ color: 0xfef08a });
+    // Coin: gold coin with 1px rim and inner shine
+    g.circle(0, -20.5, 6).fill({ color: 0xf59e0b }).stroke({ color: 0x92400e, width: 1 });
+    g.circle(0, -20.5, 2.5).fill({ color: 0xfef08a });
   }
 }
 
@@ -141,8 +152,11 @@ export function drawBubbleGraphics(g: Graphics, glyph: BubbleGlyph): void {
  */
 export class BubbleTextureCache {
   private cache = new Map<BubbleGlyph, Texture>();
+  private renderer: Renderer;
 
-  constructor(private renderer: Renderer) {}
+  constructor(renderer: Renderer) {
+    this.renderer = renderer;
+  }
 
   getTexture(glyph: BubbleGlyph): Texture {
     let tex = this.cache.get(glyph);
@@ -186,14 +200,17 @@ export class BubblePoolManager {
   private pool: PooledBubbleSprite[] = [];
   private tickCount = 0;
   private textureCache: BubbleTextureCache;
+  private callbacks: IsoSceneCallbacks;
 
-  constructor(renderer: Renderer, private callbacks: IsoSceneCallbacks) {
+  constructor(renderer: Renderer, callbacks: IsoSceneCallbacks) {
+    this.callbacks = callbacks;
     this.textureCache = new BubbleTextureCache(renderer);
-    // Pre-allocate 12 sprites
+    // Pre-allocate 12 sprites with >= 24x24 screen px hit area
     for (let i = 0; i < 12; i++) {
       const spr = new Sprite(this.textureCache.getTexture("coin"));
       spr.roundPixels = true;
       spr.anchor.set(0.5, 1);
+      spr.hitArea = new Rectangle(-BUBBLE_HIT_WIDTH / 2, -32, BUBBLE_HIT_WIDTH, BUBBLE_HIT_HEIGHT + 4);
       spr.visible = false;
       spr.eventMode = "static";
       spr.cursor = "pointer";

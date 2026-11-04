@@ -26,6 +26,19 @@ export interface Bubble {
 export const MAX_BUBBLES = 12;
 
 /**
+ * Scaled bubble dimensions (~1.5x scale) ensuring hit area >= 24x24 screen px.
+ */
+export const BUBBLE_HIT_WIDTH = 28;
+export const BUBBLE_HIT_HEIGHT = 28;
+export const BUBBLE_HIT_AREA = {
+  width: 28,
+  height: 28,
+  minWidth: 24,
+  minHeight: 24,
+  scaleFactor: 1.5,
+};
+
+/**
  * Pure function: returns at most 12 prioritized bubbles for the given city view.
  * Zero Math.random, zero Date, deterministic ordering.
  */

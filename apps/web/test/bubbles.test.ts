@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { MOCK_CITY } from "../src/data/mock-city.ts";
 import type { CityView } from "../src/lib/sim-view.ts";
-import { bubblesFor } from "../src/lib/iso/bubbles.ts";
+import { bubblesFor, BUBBLE_HIT_WIDTH, BUBBLE_HIT_HEIGHT, BUBBLE_HIT_AREA } from "../src/lib/iso/bubbles.ts";
 
 describe("Icon Bubbles Pure Logic (TDD)", () => {
   const cityView: CityView = {
@@ -88,5 +88,13 @@ describe("Icon Bubbles Pure Logic (TDD)", () => {
       assert.ok(b.description && b.description.length > 0, "description must not be empty");
       assert.ok(b.ariaLabel && b.ariaLabel.length > 0, "ariaLabel must not be empty");
     }
+  });
+
+  it("bubble hit size is at least 24x24 screen px with scaled dimensions", () => {
+    assert.ok(BUBBLE_HIT_WIDTH >= 24, `bubble hit width ${BUBBLE_HIT_WIDTH} must be >= 24px`);
+    assert.ok(BUBBLE_HIT_HEIGHT >= 24, `bubble hit height ${BUBBLE_HIT_HEIGHT} must be >= 24px`);
+    assert.ok(BUBBLE_HIT_AREA.width >= 24, `hit area width must be >= 24px`);
+    assert.ok(BUBBLE_HIT_AREA.height >= 24, `hit area height must be >= 24px`);
+    assert.equal(BUBBLE_HIT_AREA.scaleFactor >= 1.4, true, "scaled up about 1.5x");
   });
 });

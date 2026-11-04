@@ -78,6 +78,15 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
   - `cave_hold`: Slate-blue bedrock (`#3b4c5e`), lava orange hearth accents (`#ea580c`), glowing crystal clusters (`treeStyle: "crystal"`), mine rails with iron tracks and timber sleepers, forge sparks.
   - `dino_vale`: Sand dunes (`#9e9067`), dense fern green (`#2d6836`), red earth clay (`#8c3b2b`), giant prehistoric cycad tree-ferns (`treeStyle: "fern"`), bones, dinosaur eggs, footprints, packed dirt tracks.
   - `elf_grove`: Emerald moss (`#1b5e3a`), gold and violet accents (`#8e44ad` / `#e5b358`), ancient great trees with spreading arching canopies (`treeStyle: "great_tree"`), root bridges, fireflies, silver leaf glow.
+
+### Arc Matrix & Identity Table
+
+| Arc | Motif & Architecture | Base Palette (Primary / Ground / Accent) | Season Variants (Spring / Summer / Autumn / Winter) | Signature Props & Foliage |
+|---|---|---|---|---|
+| `goblin_warrens` | Subterranean fungal burrows, organic timber frames, stilted shacks, mushroom-cap roofs, winding root paths | Primary: `#6b4f7a` (purple timber)<br>Ground: `#7ea360` (mossy green)<br>Accent: `#fbbf24` (torch amber) | • **Spring**: Fungal spore fog, ambient `#fffef6`<br>• **Summer**: Cavern fireflies, light moss, ambient `#fffaea`<br>• **Autumn**: Rust-red mushroom caps (`#9a3412`), falling leaves<br>• **Winter**: Snow-dusted caps (`#f0f8ff`), thick chimney smoke | Giant procedural mushrooms (`treeStyle: "mushroom"`), iron lanterns, purple chimney smoke, moss tufts, spore vats |
+| `cave_hold` | Dwarven mountain halls, slate-blue masonry, heavy stone bastions, iron mine rails with timber sleepers | Primary: `#475b70` (slate masonry)<br>Ground: `#b8a28c` (cavern gravel)<br>Accent: `#f97316` (lava orange) | • **Spring**: Cavern dust, cool daylight (`#fffef6`)<br>• **Summer**: Forge embers, copper rock (`#c4b29c`), blue underground river<br>• **Autumn**: Copper rust gravel (`#b48b62`), steam fog<br>• **Winter**: Snow-capped peaks (`#c8d8e6`), frozen ice, roof snow caps | Glowing crystal clusters (`treeStyle: "crystal"`), wheeled ore carts, headframe mine portals, iron mine rails, forge chimney sparks |
+| `dino_vale` | Prehistoric savannah outpost, heavy timber posts, thatched palisades, bone fences, packed red-dirt roads | Primary: `#6b5c47` (primitive thatch)<br>Ground: `#68ac48` (lush fern green)<br>Accent: `#d94f38` (red earth clay) | • **Spring**: Warm tropical rain streaks, ambient `#fffef6`<br>• **Summer**: Bright mist-free sunlit sky (`#fffae4`), lush jungle green<br>• **Autumn**: Golden ochre savannah (`#b29a44`), tumbling dry fern fronds<br>• **Winter**: Dry savannah (`#929e68`), never freezes (`isFrozenWater: false`, `hasSnowCaps: false`) | Giant cycad tree ferns (`treeStyle: "fern"`), bone palisade fences, dinosaur egg nests in straw, amber shards, packed dirt paths |
+| `elf_grove` | Ancient canopy arbor, arched living boughs, houses in hollowed trunks, rope bridges, root pathways | Primary: `#3e5844` (living bark)<br>Ground: `#48a855` (emerald moss)<br>Accent: `#f472b6` (spring blossom) / `#eab308` (autumn gold) | • **Spring**: Fireflies, cherry blossom pink canopy (`#f472b6`) mixed with green broadleaf, petal accents<br>• **Summer**: Fireflies, deep emerald foliage (`#38a050`, zero pink)<br>• **Autumn**: Golden moss (`#8ca838`), gold foliage (`#eab308`) across all sorts<br>• **Winter**: Frost-dusted moss (`#8ca89a`), snow caps (`#f0f8ff`), frozen blue water | Ancient great trees (`treeStyle: "great_tree"`), density capped at <= 0.2 (~1 in 6 free grass tiles, zero on roads/footprints), rope bridges, glowing flower beds, fireflies |
 - **Season Rule (View Only)**:
   - Season is purely visual and calculated strictly from simulation step: `season = step % 4` (0: Spring, 1: Summer, 2: Autumn, 3: Winter; 1 step = 1 season). It never modifies simulation state or state roots.
   - **Spring (0)**: Fresh blooming tones, vibrant flower tufts, spring mist/fireflies, ambient tint `#fff7e6`.
@@ -112,6 +121,32 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
   - Full keyboard parity via tab-navigable municipal district button list with 2px gold focus rings.
   - Interactive click-vs-drag protection: panning movements (>4px threshold) never inadvertently select buildings or sectors.
   - Hover and selection badge plates utilize opaque charred canvas backing (`#12100e`) ensuring AAA text contrast (15.3:1).
+
+### Bubbles (Interactive Map Notifications)
+- **Visual Scale & Clarity**:
+  - Scaled up ~1.5x (~28x29px body, 28x32px hitArea) ensuring comfortable pointer/touch targets that comfortably exceed the WCAG 2.1 AA minimum 24x24px requirement.
+  - Features a crisp 1px dark border (`#16120e`) and warm illuminated parchment backing (`#f5efe6`).
+  - Outlined by a subtle translucent white halo (`#ffffff` at 45% alpha) for instant legibility against both dark bedrock and vibrant green/moss terrain tiles.
+  - High-clarity glyph rendering: bold 11px monospace "Zz" text for idle/closed shops, vivid crimson exclamation mark for chronicle events, gold coin with inner shine for active trade, and scored golden bread loaf for hungry citizens.
+- **Interaction & Accessibility**:
+  - Clicking or tapping triggers district sector selection (`onSelectSector`) with a 4px click-vs-drag threshold to prevent accidental activation during map panning.
+  - Accessible keyboard & screen-reader parity: an accessible region (`role="region" aria-label="Active city notification bubbles"`) exposes tab-navigable buttons with full descriptive ARIA labels for all active bubbles.
+- **Pooling & Reduced Motion**:
+  - Pre-allocated zero-allocation pool of max 12 bubbles (`BubblePoolManager`) with texture caching (`BubbleTextureCache`).
+  - Respects `prefers-reduced-motion`: When active, the gentle 1.5px vertical floating bob animation is disabled while maintaining full visibility and clickability.
+
+### Daylight Rule (Continuous Clear Visibility)
+- **Daytime-Only Illumination**:
+  - The simulation renders exclusively in pure daytime daylight across all four seasons and all four arcs.
+  - Avoids pitch-black night cycles or muddy shadow filters that obscure civic architecture, roads, or cart routes, ensuring full visual access and continuous WCAG AA/AAA contrast.
+- **Seasonal Daylight Tints**:
+  - Ambient lighting is modulated via a high-luminance ambient tint multiplier applied to the scene root:
+    - **Spring**: Crisp, fresh morning daylight (`#fffef6` / `#fff7e6`, relative luminance > 0.95).
+    - **Summer**: High-noon sunny golden daylight (`#fffaea` / `#fff2d6`), with slightly reduced window glow to reflect bright daylight.
+    - **Autumn**: Warm golden-amber slant light (`#fff4e6` / `#ffe4cc`), complementing gold and rust foliage.
+    - **Winter**: Cool crisp frost daylight (`#f4f8fc` / `#dce8f5`), accompanied by higher window interior glow (`windowGlowLevel: 0.35`) and doubled chimney smoke thickness (2.0x) to convey cosy hearth warmth against the cold outdoor daylight.
+- **Warm Interior Windows**:
+  - Residential and landmark windows remain warmly lit during all seasons (`#fcd34d` / `#fbbf24` / `#fef08a`), conveying civic vitality, hearth life, and active workshops without depending on dark-night contrast.
 
 ---
 

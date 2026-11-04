@@ -24,6 +24,131 @@ export interface IsoSceneCallbacks {
   onHoverBuilding?: (b: BuildingLayout | null) => void;
 }
 
+export interface TreePlacement {
+  tileX: number;
+  tileY: number;
+  treeType: number;
+}
+
+/**
+ * Builds the set of tiles occupied by roads, sidewalks, plaza, buildings, houses, and stalls.
+ */
+export function buildOccupiedTileSet(layout: CityLayout): Set<string> {
+  const occupied = new Set<string>();
+  for (const r of layout.roads) occupied.add(`${r.x},${r.y}`);
+  for (const s of layout.sidewalks ?? []) occupied.add(`${s.x},${s.y}`);
+  if (layout.plaza) occupied.add(`${layout.plaza.x},${layout.plaza.y}`);
+  for (const b of layout.buildings) occupied.add(`${b.tileX},${b.tileY}`);
+  for (const h of layout.houses) occupied.add(`${h.tileX},${h.tileY}`);
+  for (const sb of layout.supportingBuildings ?? []) occupied.add(`${sb.tileX},${sb.tileY}`);
+  for (const m of layout.marketStalls ?? []) occupied.add(`${m.tileX},${m.tileY}`);
+  for (const rf of layout.ruralFeatures ?? []) occupied.add(`${rf.tileX},${rf.tileY}`);
+  return occupied;
+}
+
+/**
+ * Counts free grass/forest tiles that have no roads, buildings, houses, or infrastructure.
+ */
+export function countFreeGrassTiles(terrain: TerrainMap, layout: CityLayout): number {
+  const occupied = buildOccupiedTileSet(layout);
+  let count = 0;
+  for (let y = 0; y < terrain.size; y++) {
+    for (let x = 0; x < terrain.size; x++) {
+      const t = terrain.tiles[y][x];
+      if (t !== "water" && t !== "rock" && !occupied.has(`${x},${y}`)) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * Deterministically computes tree placements for the scene.
+ * For elf_grove: density is strictly capped at at most ~1 in 6 free grass tiles (<= 0.2 ratio),
+ * and strictly zero trees on roads, sidewalks, building plots, or footprints.
+ */
+export function getSceneTreePlacements(
+  terrain: TerrainMap,
+  layout: CityLayout,
+  arcId: string,
+  season = 0
+): TreePlacement[] {
+  void season;
+  const occupied = buildOccupiedTileSet(layout);
+  const freeGrassCount = countFreeGrassTiles(terrain, layout);
+  const placements: TreePlacement[] = [];
+  const placedSet = new Set<string>();
+
+  if (arcId === "elf_grove") {
+    const maxElfTrees = Math.floor(freeGrassCount / 6);
+
+    for (let y = 0; y < terrain.size; y++) {
+      for (let x = 0; x < terrain.size; x++) {
+        if (placements.length >= maxElfTrees) break;
+        const key = `${x},${y}`;
+        if (occupied.has(key) || placedSet.has(key)) continue;
+
+        if (terrain.tiles[y][x] !== "forest") continue;
+
+        // Thinning via spatial hash: ~50% of free forest tiles, capped at 1 in 6 free grass tiles
+        if ((((x * 73856093) ^ (y * 19349663)) >>> 0) % 2 === 0) {
+          placedSet.add(key);
+          placements.push({
+            tileX: x,
+            tileY: y,
+            treeType: getTileVariant(x, y, 3),
+          });
+        }
+      }
+    }
+
+    // Include roadside props if free and within cap
+    for (const pr of layout.props ?? []) {
+      if (placements.length >= maxElfTrees) break;
+      const key = `${pr.tileX},${pr.tileY}`;
+      if (!occupied.has(key) && !placedSet.has(key)) {
+        placedSet.add(key);
+        placements.push({
+          tileX: pr.tileX,
+          tileY: pr.tileY,
+          treeType: getTileVariant(pr.tileX, pr.tileY, 3),
+        });
+      }
+    }
+  } else {
+    // Other arcs: forest tiles and roadside props, excluding occupied tiles
+    for (let y = 0; y < terrain.size; y++) {
+      for (let x = 0; x < terrain.size; x++) {
+        const key = `${x},${y}`;
+        if (occupied.has(key) || placedSet.has(key)) continue;
+        if (terrain.tiles[y][x] === "forest") {
+          placedSet.add(key);
+          placements.push({
+            tileX: x,
+            tileY: y,
+            treeType: getTileVariant(x, y, 3),
+          });
+        }
+      }
+    }
+
+    for (const pr of layout.props ?? []) {
+      const key = `${pr.tileX},${pr.tileY}`;
+      if (!occupied.has(key) && !placedSet.has(key)) {
+        placedSet.add(key);
+        placements.push({
+          tileX: pr.tileX,
+          tileY: pr.tileY,
+          treeType: getTileVariant(pr.tileX, pr.tileY, 3),
+        });
+      }
+    }
+  }
+
+  return placements;
+}
+
 export class IsoCityScene {
   public root = new Container();
   private groundLayer = new Container();
@@ -44,13 +169,15 @@ export class IsoCityScene {
   private currentSeason = 0;
   private currentTheme: ThemeTokens | null = null;
   private selectedIdx = 0;
+  private app: Application;
   private callbacks: IsoSceneCallbacks;
   private allowMotion = true;
   private tickerRunning = false;
   private hoverBadge: Container | null = null;
   private selBadge: Container | null = null;
 
-  constructor(private app: Application, callbacks: IsoSceneCallbacks = {}) {
+  constructor(app: Application, callbacks: IsoSceneCallbacks = {}) {
+    this.app = app;
     this.callbacks = callbacks;
     this.textureManager = new IsoTextureManager(app.renderer);
     this.bubbleManager = new BubblePoolManager(app.renderer, this.callbacks);
@@ -165,39 +292,22 @@ export class IsoCityScene {
     // 4. Entities (Trees, Houses, Landmarks) sorted by depth
     const entityDisplayList: Array<{ container: Container; depth: number }> = [];
 
-    // Ambient Trees on forest tiles (giant mushrooms for goblin warrens, etc.)
-    for (let y = 0; y < terrain.size; y++) {
-      for (let x = 0; x < terrain.size; x++) {
-        if (terrain.tiles[y][x] === "forest") {
-          const treeType = getTileVariant(x, y, 3);
-          const tex = tm.getTreeTexture(treeType, arcId, season);
-          const spr = new Sprite(tex);
-          spr.roundPixels = true;
-          const scr = isoToScreen(x, y);
-          spr.position.set(scr.x, scr.y);
-          spr.anchor.set(0.5, 0.88);
-          spr.eventMode = "none";
-          trees.push(spr);
-
-          entityDisplayList.push({
-            container: spr,
-            depth: depthSortKey(x, y, 0),
-          });
-        }
-      }
-    }
-
-    // Roadside trees from the layout (arc-themed tree texture)
-    for (const pr of layout.props ?? []) {
-      const tex = tm.getTreeTexture(getTileVariant(pr.tileX, pr.tileY, 3), arcId, season);
+    // Ambient & roadside trees (density-capped, arc-themed, sort-mixed, no collisions)
+    const treePlacements = getSceneTreePlacements(terrain, layout, arcId, season);
+    for (const tp of treePlacements) {
+      const tex = tm.getTreeTexture(tp.treeType, arcId, season);
       const spr = new Sprite(tex);
       spr.roundPixels = true;
-      const scr = isoToScreen(pr.tileX, pr.tileY);
+      const scr = isoToScreen(tp.tileX, tp.tileY);
       spr.position.set(scr.x, scr.y);
       spr.anchor.set(0.5, 0.88);
       spr.eventMode = "none";
       trees.push(spr);
-      entityDisplayList.push({ container: spr, depth: depthSortKey(pr.tileX, pr.tileY, 0) });
+
+      entityDisplayList.push({
+        container: spr,
+        depth: depthSortKey(tp.tileX, tp.tileY, 0),
+      });
     }
 
     // Residential Citizen Houses (mushroom-cap cottages & cave huts for goblins)

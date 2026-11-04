@@ -11,6 +11,98 @@ export function drawDropShadow(g: Graphics, rx = 12, ry = 6, alpha = 0.35): void
   g.ellipse(0, 0, rx, ry).fill({ color: 0x080604, alpha });
 }
 
+export interface ElfTreeFoliage {
+  color: number;
+  highlightColor: number;
+  shadowColor: number;
+  isBlossom: boolean;
+  isAutumnGold: boolean;
+  sortName: "green_broadleaf" | "pink_blossom" | "elder_broadleaf" | "autumn_gold" | "frost_evergreen";
+}
+
+/**
+ * Returns tree foliage color, blossom flag, and sort name for Elf Grove.
+ * Mixes 3 sorts: green broadleaf, pink blossom ONLY in spring, gold in autumn, plain green other seasons.
+ */
+export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage {
+  const normSort = ((Math.floor(sort) % 3) + 3) % 3;
+  const seasonIdx = ((Math.floor(season) % 4) + 4) % 4;
+
+  if (seasonIdx === 0) {
+    // Spring: only sort 1 is pink blossom; sorts 0 and 2 are green broadleaf
+    if (normSort === 1) {
+      const color = 0xf472b6; // Cherry blossom pink
+      return {
+        color,
+        highlightColor: 0xfbcfe8,
+        shadowColor: 0xdb2777,
+        isBlossom: true,
+        isAutumnGold: false,
+        sortName: "pink_blossom",
+      };
+    }
+    if (normSort === 2) {
+      const color = 0x48bb78; // Fresh spring broadleaf
+      return {
+        color,
+        highlightColor: shade(color, 1.2),
+        shadowColor: shade(color, 0.8),
+        isBlossom: false,
+        isAutumnGold: false,
+        sortName: "elder_broadleaf",
+      };
+    }
+    const color = 0x2d6a4f; // Deep emerald broadleaf
+    return {
+      color,
+      highlightColor: shade(color, 1.2),
+      shadowColor: shade(color, 0.8),
+      isBlossom: false,
+      isAutumnGold: false,
+      sortName: "green_broadleaf",
+    };
+  }
+
+  if (seasonIdx === 1) {
+    // Summer: plain green broadleaf for all sorts (zero blossom)
+    const greens = [0x2d6a4f, 0x38a050, 0x40916c];
+    const color = greens[normSort];
+    return {
+      color,
+      highlightColor: shade(color, 1.2),
+      shadowColor: shade(color, 0.8),
+      isBlossom: false,
+      isAutumnGold: false,
+      sortName: normSort === 0 ? "green_broadleaf" : "elder_broadleaf",
+    };
+  }
+
+  if (seasonIdx === 2) {
+    // Autumn: gold in autumn for all 3 sorts
+    const golds = [0xeab308, 0xf59e0b, 0xd97706];
+    const color = golds[normSort];
+    return {
+      color,
+      highlightColor: shade(color, 1.2),
+      shadowColor: shade(color, 0.8),
+      isBlossom: false,
+      isAutumnGold: true,
+      sortName: "autumn_gold",
+    };
+  }
+
+  // Winter: frost / winter evergreen
+  const color = 0x8ca89a;
+  return {
+    color,
+    highlightColor: shade(color, 1.2),
+    shadowColor: shade(color, 0.8),
+    isBlossom: false,
+    isAutumnGold: false,
+    sortName: "frost_evergreen",
+  };
+}
+
 /**
  * Draws arc-specific tree/foliage (mushrooms, crystals, ferns, great trees) with 1px dark outline.
  */
@@ -60,19 +152,26 @@ export function drawTreeGraphics(
     g.circle(0, -14, 3).fill({ color: fCol });
   } else if (treeStyle === "great_tree") {
     // Elf Grove: Ancient broad canopy tree with houses in trunks
+    // Mixes 3 sorts: green broadleaf, pink blossom only in spring, gold in autumn, plain green other seasons
     g.rect(-4, -18, 8, 18).fill({ color: 0x243326 }).stroke({ color: 0x101a12, width: 1 });
     g.rect(-1.5, -6, 3, 5).fill({ color: 0x152217 });
     g.circle(0, -11, 1.5).fill({ color: 0xfef08a }); // Lit window in trunk
 
-    let leafCol = pal.forest;
-    if (hasSnow) leafCol = 0xf0f8ff;
-    else if (theme.seasonName === "spring") leafCol = 0xf472b6; // Cherry blossom pink
-    else if (theme.seasonName === "autumn") leafCol = 0xeab308; // Gold in autumn
-    else if (theme.seasonName === "summer") leafCol = 0x38a050;
+    const foliage = getElfTreeFoliage(treeType, season);
+    const leafCol = hasSnow ? 0xf0f8ff : foliage.color;
+    const hiCol = hasSnow ? 0xffffff : foliage.highlightColor;
+    const shCol = hasSnow ? 0xd0e8f2 : foliage.shadowColor;
 
     g.circle(0, -22, 13).fill({ color: leafCol }).stroke({ color: outlineColor(leafCol), width: 1 });
-    g.circle(-6, -26, 9).fill({ color: shade(leafCol, 1.2) });
-    g.circle(6, -24, 8).fill({ color: shade(leafCol, 0.85) });
+    g.circle(-6, -26, 9).fill({ color: hiCol });
+    g.circle(6, -24, 8).fill({ color: shCol });
+
+    if (foliage.isBlossom && !hasSnow) {
+      // Pink blossom flower accents on blossom sort
+      g.circle(-3, -20, 1.5).fill({ color: 0xfdf2f8 });
+      g.circle(3, -21, 1.2).fill({ color: 0xfdf2f8 });
+      g.circle(0, -25, 1.4).fill({ color: 0xfdf2f8 });
+    }
   } else {
     // Default Pine / Broadleaf / Birch
     g.rect(-2, -14, 4, 14).fill({ color: 0x3d2b1a }).stroke({ color: 0x1a120b, width: 1 });

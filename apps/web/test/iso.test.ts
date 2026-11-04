@@ -6,6 +6,8 @@ import { layoutCity } from "../src/lib/iso/layout.ts";
 import { generateRoadPaths, generateActors } from "../src/lib/iso/animation.ts";
 import { getStageTokens } from "../src/lib/iso/stage-tokens.ts";
 import { shade, outlineColor, getTheme, SEASON_NAMES, relativeLuminance } from "../src/lib/iso/theme.ts";
+import { getSceneTreePlacements, countFreeGrassTiles } from "../src/lib/iso/render.ts";
+import { getElfTreeFoliage } from "../src/lib/iso/sprites-props.ts";
 import { MOCK_CITY } from "../src/data/mock-city.ts";
 import type { CityView } from "../src/lib/sim-view.ts";
 
@@ -639,6 +641,74 @@ describe("Isometric City Logic", () => {
       assert.ok(egSpring.props.includes("big_trees") || egSpring.props.includes("root_bridges"));
       assert.notEqual(egSpring.ground.grass, egAutumn.ground.grass, "distinct seasonal palettes for elf_grove");
       assert.ok(egSpring.accent !== undefined);
+    });
+
+    it("elf_grove tree-to-free-tile ratio <= 0.2 across seasons, capped at ~1 in 6, none on roads/footprints", () => {
+      const seeds = ["tree_seed_a", "tree_seed_b", "elf_grove_dense"];
+      for (const seed of seeds) {
+        const terrain = generateTerrain(seed, "elf_grove", 48);
+        const layout = layoutCity(terrain, { ...mockView, arc_id: "elf_grove" });
+
+        const occupied = new Set<string>();
+        for (const r of layout.roads) occupied.add(`${r.x},${r.y}`);
+        for (const s of layout.sidewalks ?? []) occupied.add(`${s.x},${s.y}`);
+        if (layout.plaza) occupied.add(`${layout.plaza.x},${layout.plaza.y}`);
+        for (const b of layout.buildings) occupied.add(`${b.tileX},${b.tileY}`);
+        for (const h of layout.houses) occupied.add(`${h.tileX},${h.tileY}`);
+        for (const sb of layout.supportingBuildings ?? []) occupied.add(`${sb.tileX},${sb.tileY}`);
+        for (const m of layout.marketStalls ?? []) occupied.add(`${m.tileX},${m.tileY}`);
+        for (const rf of layout.ruralFeatures ?? []) occupied.add(`${rf.tileX},${rf.tileY}`);
+
+        const freeGrassCount = countFreeGrassTiles(terrain, layout);
+        assert.ok(freeGrassCount > 500, `expected plentiful free grass tiles, got ${freeGrassCount}`);
+
+        for (let season = 0; season < 4; season++) {
+          const trees = getSceneTreePlacements(terrain, layout, "elf_grove", season);
+          const ratio = trees.length / freeGrassCount;
+
+          assert.ok(
+            ratio <= 0.2,
+            `tree ratio ${ratio.toFixed(4)} must be <= 0.2 (treeCount: ${trees.length}, free: ${freeGrassCount})`
+          );
+          assert.ok(
+            trees.length <= Math.ceil(freeGrassCount / 5),
+            `tree count ${trees.length} should be at most about 1 in 6 free grass tiles`
+          );
+
+          // Assert zero trees on occupied tiles (roads, sidewalks, buildings, houses, etc.)
+          for (const tree of trees) {
+            const key = `${tree.tileX},${tree.tileY}`;
+            assert.ok(!occupied.has(key), `Tree at (${key}) collides with road/plot/building footprint`);
+          }
+        }
+      }
+    });
+
+    it("elf_grove mixes 3 tree sorts: pink blossom only in spring, gold in autumn, plain green other seasons", () => {
+      // 3 sorts: 0, 1, 2
+      // Spring: sort 1 has pink blossom, sort 0 & 2 are green broadleaf
+      const s0Spring = getElfTreeFoliage(0, 0);
+      const s1Spring = getElfTreeFoliage(1, 0);
+      const s2Spring = getElfTreeFoliage(2, 0);
+
+      assert.equal(s1Spring.isBlossom, true, "sort 1 should be pink blossom in spring");
+      assert.equal(s0Spring.isBlossom, false, "sort 0 should be green broadleaf in spring");
+      assert.equal(s2Spring.isBlossom, false, "sort 2 should be green broadleaf in spring");
+
+      // Check summer (season 1): pink flood disappears outside spring!
+      for (const season of [1, 2, 3]) {
+        for (let sort = 0; sort < 3; sort++) {
+          const foliage = getElfTreeFoliage(sort, season);
+          assert.equal(
+            foliage.isBlossom,
+            false,
+            `no pink blossom allowed in season ${season} (sort ${sort})`
+          );
+          if (season === 2) {
+            assert.equal(foliage.isAutumnGold, true, `autumn season must feature gold foliage for sort ${sort}`);
+          }
+        }
+      }
     });
   });
 });
