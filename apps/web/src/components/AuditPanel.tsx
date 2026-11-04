@@ -9,7 +9,22 @@ import {
   computeBrowserRulesHash,
   createReplayState,
   auditOneCheckpoint,
+  replayToStep,
 } from "../lib/audit.ts";
+import {
+  TESTNET_CONTRACT_ID,
+  TESTNET_CITY_ID,
+  TESTNET_ARC_ID,
+  TESTNET_SEED,
+  TESTNET_STEPS,
+  TESTNET_CHECKPOINTS,
+  buildExplorerTxUrl,
+} from "../data/testnet.ts";
+import {
+  fetchCityFromChain,
+  compareToChain,
+  type ChainCity,
+} from "../lib/chain.ts";
 
 interface AuditPanelProps {
   arcId: string;
@@ -38,6 +53,15 @@ export function AuditPanel({
   const [auditLines, setAuditLines] = useState<AuditLine[]>([]);
   const [summary, setSummary] = useState<string>("");
   const [rulesHash, setRulesHash] = useState<string>("");
+
+  // Testnet verification state
+  const [isComparingChain, setIsComparingChain] = useState<boolean>(false);
+  const [chainResult, setChainResult] = useState<{
+    ok: boolean;
+    message: string;
+    replayRoot?: string;
+    chainCity?: ChainCity | null;
+  } | null>(null);
 
   const cancelRef = useRef<boolean>(false);
 
@@ -133,6 +157,51 @@ export function AuditPanel({
     setIsAuditing(false);
     setProgress(null);
   }, [workingList, isAuditing, cityId, arcId, seed]);
+
+  // Replay goblin_warrens seed demo for 200 steps and verify against NEAR testnet
+  const handleVerifyTestnet = useCallback(async () => {
+    if (isComparingChain) return;
+    setIsComparingChain(true);
+    setChainResult(null);
+
+    try {
+      // Yield to let browser render the loading state
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const { stateRoot, step: replayedStep } = replayToStep(
+        TESTNET_ARC_ID,
+        TESTNET_SEED,
+        TESTNET_STEPS,
+        TESTNET_CITY_ID
+      );
+
+      const fetchRes = await fetchCityFromChain(TESTNET_CONTRACT_ID, TESTNET_CITY_ID);
+      if (!fetchRes.ok) {
+        setChainResult({
+          ok: false,
+          message: `FAILED: could not fetch city from chain: ${fetchRes.error}`,
+          replayRoot: stateRoot,
+        });
+        setIsComparingChain(false);
+        return;
+      }
+
+      const cmp = compareToChain(stateRoot, replayedStep, fetchRes.city);
+      setChainResult({
+        ok: cmp.ok,
+        message: cmp.reason,
+        replayRoot: stateRoot,
+        chainCity: fetchRes.city,
+      });
+    } catch (err: unknown) {
+      setChainResult({
+        ok: false,
+        message: `FAILED: unexpected error during replay verification: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setIsComparingChain(false);
+    }
+  }, [isComparingChain]);
 
   const hasCheckpoints = workingList.length > 0;
   const tamperTargetLabel = workingList.length >= 2 ? "checkpoint 2 (step 40..80)" : "checkpoint 1 (step 0..40)";
@@ -332,6 +401,102 @@ export function AuditPanel({
             {summary}
           </div>
         )}
+      </div>
+
+      {/* Verify against NEAR testnet Section */}
+      <div className="pt-4 border-t border-atlas-line space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+          <h3 className="text-sm font-display font-semibold text-atlas-ink flex items-center gap-2">
+            <span aria-hidden="true" className="text-atlas-gold">🌐</span>
+            Verify against NEAR testnet
+          </h3>
+          <span className="font-mono text-xs text-atlas-ink-muted break-all">
+            Contract: <code className="text-atlas-gold selection:bg-atlas-gold selection:text-atlas-canvas">{TESTNET_CONTRACT_ID}</code>
+          </span>
+        </div>
+
+        <p className="text-xs text-atlas-ink-muted leading-relaxed">
+          On-chain city <code className="text-atlas-ink">{TESTNET_CITY_ID}</code> (arc: {TESTNET_ARC_ID}, seed: {TESTNET_SEED}) has 200 steps committed on NEAR testnet across 5 checkpoints. Replay independently in your browser and compare the resulting state root against the smart contract.
+        </p>
+
+        {/* Action Button */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleVerifyTestnet}
+            disabled={isComparingChain}
+            className={`atlas-focus px-3.5 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 ${
+              isComparingChain
+                ? "bg-atlas-ash/20 text-atlas-ash border border-atlas-line cursor-not-allowed"
+                : "bg-atlas-surface-raised border border-atlas-gold text-atlas-gold hover:bg-atlas-gold/15 cursor-pointer"
+            }`}
+            aria-label="Replay seed demo and compare with chain"
+          >
+            {isComparingChain ? (
+              <>
+                <span className="inline-block animate-spin" aria-hidden="true">⏳</span>
+                <span>Replaying 200 steps & querying chain…</span>
+              </>
+            ) : (
+              <>
+                <span aria-hidden="true">⚡</span>
+                <span>Replay seed <code>demo</code> and compare with chain</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Live Region for Results */}
+        <div aria-live="polite" role="status" aria-atomic="true">
+          {chainResult && (
+            <div
+              className={`p-3 rounded-xs font-mono text-xs border space-y-1.5 ${
+                chainResult.ok
+                  ? "border-atlas-moss bg-atlas-moss/20 text-atlas-moss"
+                  : "border-atlas-alert bg-atlas-alert/20 text-atlas-alert"
+              }`}
+            >
+              <div className="font-bold">{chainResult.message}</div>
+              {chainResult.replayRoot && (
+                <div className="text-[11px] text-atlas-ink break-all">
+                  Browser replay state_root: <code>{chainResult.replayRoot}</code> (step 200)
+                </div>
+              )}
+              {chainResult.chainCity && (
+                <div className="text-[11px] text-atlas-ink break-all">
+                  NEAR testnet state_root: <code>{chainResult.chainCity.state_root}</code> (step {chainResult.chainCity.step})
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Checkpoint Transactions (Links to NearBlocks explorer) */}
+        <div className="space-y-1.5 pt-1">
+          <div className="text-[11px] font-mono text-atlas-ink-muted">
+            On-chain checkpoint transactions (NearBlocks explorer):
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {TESTNET_CHECKPOINTS.map((cp) => (
+              <a
+                key={cp.txId}
+                href={buildExplorerTxUrl(cp.txId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="atlas-focus p-2 rounded-xs border border-atlas-line bg-atlas-surface-raised hover:border-atlas-gold hover:bg-atlas-gold/5 transition-colors font-mono text-xs flex flex-col gap-0.5 group"
+                aria-label={`View Checkpoint ${cp.index} (steps ${cp.fromStep} to ${cp.toStep}) on NearBlocks`}
+              >
+                <div className="flex items-center justify-between text-[11px] text-atlas-ink-muted">
+                  <span className="font-semibold text-atlas-gold">Checkpoint {cp.index}</span>
+                  <span>Steps {cp.fromStep}..{cp.toStep}</span>
+                </div>
+                <div className="text-[11px] text-atlas-ink font-mono truncate group-hover:text-atlas-gold">
+                  Tx: {cp.txId.slice(0, 10)}…{cp.txId.slice(-6)} ↗
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -282,3 +282,33 @@ export async function computeBrowserRulesHash(arcId: string): Promise<string> {
 
   return sha256Hex(pricingHash + growthHash + arcHash);
 }
+
+/**
+ * Replays simulation from genesis up to targetStep and returns final state root and step.
+ * Reuses createReplayState and pure simulation stepping without duplicating logic.
+ */
+export function replayToStep(
+  arcId: string,
+  seed: string,
+  targetStep: number,
+  cityId?: string
+): { stateRoot: string; step: number } {
+  const replay = createReplayState(arcId, seed, cityId);
+  const arc = getArc(arcId);
+  const pricing = getPricingRules();
+  const growth = getGrowthRules();
+  const ctx = { arc, pricing, growth };
+
+  for (let s = 1; s <= targetStep; s++) {
+    const res = step(replay.currState, ctx);
+    replay.currState = res.state;
+    const eRoot = eventRoot(res.events);
+    const cRoot = cityRoot(replay.currState);
+    replay.currPrevRoot = nextStateRoot(replay.currPrevRoot, replay.currState.step, eRoot, cRoot);
+  }
+
+  return {
+    stateRoot: replay.currPrevRoot,
+    step: replay.currState.step,
+  };
+}
