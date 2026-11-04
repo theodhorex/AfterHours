@@ -30,7 +30,7 @@
       "id": "forager",
       "sector": 0,
       "inputs": {},
-      "outputs": { "grain": 2 },
+      "outputs": { "grain": 4 },
       "wage": 24,
       "max_per_run_per_business": 35
     },
