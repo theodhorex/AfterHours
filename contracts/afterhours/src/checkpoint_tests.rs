@@ -55,7 +55,7 @@ fn setup_city(contract: &mut AfterHours) {
     let mut source_caps = BTreeMap::new();
     source_caps.insert("bread".to_string(), U128(20));
     let mut sink_caps = BTreeMap::new();
-    sink_caps.insert("bread".to_string(), U128(20));
+    sink_caps.insert("bread".to_string(), U128(1000));
     contract.register_arc(
         "arc_test".to_string(),
         prod_caps,
@@ -343,8 +343,8 @@ fn checkpoint_sunk_over_cap_rejected() {
 
     set_caller("operator.testnet");
     let mut cp = valid_base_checkpoint();
-    // Cap is 20 per step; steps = 1; sunk = 21 => SINK_CAP_EXCEEDED
-    cp.items.get_mut("bread").unwrap().sunk = U128(21);
+    // Cap is 1000 per step; steps = 1; sunk = 1001 => SINK_CAP_EXCEEDED
+    cp.items.get_mut("bread").unwrap().sunk = U128(1001);
     contract.submit_checkpoint(cp);
 }
 
@@ -593,4 +593,167 @@ fn seeded_property_loop_conserves_all_flows() {
         "Coin invariant violated: final ({}) != expected ({})",
         final_city_coin, expected_in_world_coin
     );
+}
+
+#[test]
+#[should_panic(expected = "TOO_MANY_ITEMS")]
+fn test_checkpoint_too_many_items_rejected() {
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    let mut items = BTreeMap::new();
+    for i in 0..33 {
+        items.insert(
+            format!("item_{i}"),
+            ItemFlow {
+                produced: U128(0),
+                consumed_recipe: U128(0),
+                consumed_pop: U128(0),
+                sourced: U128(0),
+                sunk: U128(0),
+                trade_to_players: U128(0),
+                trade_from_players: U128(0),
+            },
+        );
+    }
+    let cp = Checkpoint {
+        city_id: "city_test".to_string(),
+        from_step: 0,
+        to_step: 10,
+        new_state_root: HEX_C.to_string(),
+        new_city_root: HEX_D.to_string(),
+        stage: 0,
+        items,
+        coin: CoinFlow {
+            sourced: U128(0),
+            sunk: U128(0),
+            trade_to_players: U128(0),
+            trade_from_players: U128(0),
+        },
+        player_deltas: vec![],
+        executed_order_ids: vec![],
+    };
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
+#[should_panic(expected = "UNREGISTERED_ITEM")]
+fn test_checkpoint_unregistered_item_rejected() {
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    let mut items = BTreeMap::new();
+    items.insert(
+        "unregistered_potion".to_string(),
+        ItemFlow {
+            produced: U128(0),
+            consumed_recipe: U128(0),
+            consumed_pop: U128(0),
+            sourced: U128(0),
+            sunk: U128(0),
+            trade_to_players: U128(0),
+            trade_from_players: U128(0),
+        },
+    );
+    let cp = Checkpoint {
+        city_id: "city_test".to_string(),
+        from_step: 0,
+        to_step: 10,
+        new_state_root: HEX_C.to_string(),
+        new_city_root: HEX_D.to_string(),
+        stage: 0,
+        items,
+        coin: CoinFlow {
+            sourced: U128(0),
+            sunk: U128(0),
+            trade_to_players: U128(0),
+            trade_from_players: U128(0),
+        },
+        player_deltas: vec![],
+        executed_order_ids: vec![],
+    };
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
+#[should_panic(expected = "TRADE_TO_PLAYERS_EXCEEDS_SINK_CAP")]
+fn test_checkpoint_trade_to_players_exceeds_sink_cap_rejected() {
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    // Sink cap for bread is 1000 per step. For 10 steps, max is 10000.
+    // Try trade_to_players = 10001.
+    let mut items = BTreeMap::new();
+    items.insert(
+        "bread".to_string(),
+        ItemFlow {
+            produced: U128(0),
+            consumed_recipe: U128(0),
+            consumed_pop: U128(0),
+            sourced: U128(0),
+            sunk: U128(0),
+            trade_to_players: U128(10_001),
+            trade_from_players: U128(0),
+        },
+    );
+    let cp = Checkpoint {
+        city_id: "city_test".to_string(),
+        from_step: 0,
+        to_step: 10,
+        new_state_root: HEX_C.to_string(),
+        new_city_root: HEX_D.to_string(),
+        stage: 0,
+        items,
+        coin: CoinFlow {
+            sourced: U128(0),
+            sunk: U128(0),
+            trade_to_players: U128(0),
+            trade_from_players: U128(0),
+        },
+        player_deltas: vec![PlayerDelta {
+            account: acc("bob.testnet"),
+            token_id: "bread".to_string(),
+            delta_in: U128(10_001),
+            delta_out: U128(0),
+        }],
+        executed_order_ids: vec![],
+    };
+    contract.submit_checkpoint(cp);
+}
+
+#[test]
+#[should_panic(expected = "TOO_MANY_PLAYER_DELTAS")]
+fn test_checkpoint_too_many_player_deltas_rejected() {
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_city(&mut contract);
+
+    // 41 deltas should be rejected (limit lowered to 40)
+    let mut player_deltas = Vec::new();
+    for _ in 0..41 {
+        player_deltas.push(PlayerDelta {
+            account: acc("bob.testnet"),
+            token_id: "bread".to_string(),
+            delta_in: U128(0),
+            delta_out: U128(0),
+        });
+    }
+
+    let cp = Checkpoint {
+        city_id: "city_test".to_string(),
+        from_step: 0,
+        to_step: 10,
+        new_state_root: HEX_C.to_string(),
+        new_city_root: HEX_D.to_string(),
+        stage: 0,
+        items: BTreeMap::new(),
+        coin: CoinFlow {
+            sourced: U128(0),
+            sunk: U128(0),
+            trade_to_players: U128(0),
+            trade_from_players: U128(0),
+        },
+        player_deltas,
+        executed_order_ids: vec![],
+    };
+    contract.submit_checkpoint(cp);
 }

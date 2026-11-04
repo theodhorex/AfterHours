@@ -127,3 +127,10 @@ The multi-city world runner (`runWorld(cfg)` in `packages/sim/src/world.ts`) coo
 - **Replay verification**:
   Because caravan transactions depend on multi-city interaction and cross-city price spreads, a single city's checkpoints cannot be replayed in isolation without the counterparty states. The replay verifier reproduces caravan checkpoints by invoking `runWorld` with the identical `WorldConfig` (same cities, seeds, and routes), comparing the resulting roots and checkpoints.
 
+## Market contract
+- `buy_city(city_id, expected_city_root)` pins `city.city_root` against `CITY_ROOT_CHANGED`; payouts and refunds use callbacks to record failed transfers under `claimable` withdrawable via `withdraw_claimable()`.
+
+## Known trust gap
+Player asset transfers from the city (`trade_to_players`) are operator-declared and capped by the arc's sink cap per checkpoint; city genesis totals are capped (`MAX_GENESIS_ITEM_TOTAL = 10_000_000`) and arc-bound. Full player escrow is pending future upgrade.
+
+

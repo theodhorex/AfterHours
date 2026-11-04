@@ -80,8 +80,13 @@ impl AfterHours {
         }
         let cur = self.internal_balance_of(account_id, token_id);
         let new_bal = cur.checked_sub(amount).expect("INSUFFICIENT_BALANCE");
-        self.balances
-            .insert((account_id.clone(), token_id.to_string()), new_bal);
+        if new_bal == 0 {
+            self.balances
+                .remove(&(account_id.clone(), token_id.to_string()));
+        } else {
+            self.balances
+                .insert((account_id.clone(), token_id.to_string()), new_bal);
+        }
 
         let cur_supply = self.supply.get(token_id).copied().expect("NO_SUPPLY");
         let new_supply = cur_supply.checked_sub(amount).expect("SUPPLY_UNDERFLOW");
@@ -90,7 +95,11 @@ impl AfterHours {
         if new_bal == 0 {
             if let Some(mut list) = self.tokens_for_owner.get(account_id).cloned() {
                 list.retain(|t| t != token_id);
-                self.tokens_for_owner.insert(account_id.clone(), list);
+                if list.is_empty() {
+                    self.tokens_for_owner.remove(account_id);
+                } else {
+                    self.tokens_for_owner.insert(account_id.clone(), list);
+                }
             }
         }
 
@@ -131,8 +140,12 @@ impl AfterHours {
         let sender_bal = self.internal_balance_of(&sender_id, &token_id);
         require!(sender_bal >= amount.0, "INSUFFICIENT_BALANCE");
         let new_sender_bal = sender_bal.checked_sub(amount.0).expect("UNDERFLOW");
-        self.balances
-            .insert((sender_id.clone(), token_id.clone()), new_sender_bal);
+        if new_sender_bal == 0 {
+            self.balances.remove(&(sender_id.clone(), token_id.clone()));
+        } else {
+            self.balances
+                .insert((sender_id.clone(), token_id.clone()), new_sender_bal);
+        }
 
         let receiver_bal = self.internal_balance_of(&receiver_id, &token_id);
         let new_receiver_bal = receiver_bal.checked_add(amount.0).expect("OVERFLOW");
@@ -142,7 +155,11 @@ impl AfterHours {
         if new_sender_bal == 0 {
             if let Some(mut list) = self.tokens_for_owner.get(&sender_id).cloned() {
                 list.retain(|t| t != &token_id);
-                self.tokens_for_owner.insert(sender_id.clone(), list);
+                if list.is_empty() {
+                    self.tokens_for_owner.remove(&sender_id);
+                } else {
+                    self.tokens_for_owner.insert(sender_id.clone(), list);
+                }
             }
         }
         if receiver_bal == 0 {
@@ -216,8 +233,12 @@ impl AfterHours {
             let sender_bal = self.internal_balance_of(&sender_id, token_id);
             require!(sender_bal >= amount.0, "INSUFFICIENT_BALANCE");
             let new_sender_bal = sender_bal.checked_sub(amount.0).expect("UNDERFLOW");
-            self.balances
-                .insert((sender_id.clone(), token_id.clone()), new_sender_bal);
+            if new_sender_bal == 0 {
+                self.balances.remove(&(sender_id.clone(), token_id.clone()));
+            } else {
+                self.balances
+                    .insert((sender_id.clone(), token_id.clone()), new_sender_bal);
+            }
 
             let receiver_bal = self.internal_balance_of(&receiver_id, token_id);
             let new_receiver_bal = receiver_bal.checked_add(amount.0).expect("OVERFLOW");
@@ -227,7 +248,11 @@ impl AfterHours {
             if new_sender_bal == 0 {
                 if let Some(mut list) = self.tokens_for_owner.get(&sender_id).cloned() {
                     list.retain(|t| t != token_id);
-                    self.tokens_for_owner.insert(sender_id.clone(), list);
+                    if list.is_empty() {
+                        self.tokens_for_owner.remove(&sender_id);
+                    } else {
+                        self.tokens_for_owner.insert(sender_id.clone(), list);
+                    }
                 }
             }
             if receiver_bal == 0 {

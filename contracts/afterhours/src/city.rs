@@ -63,12 +63,23 @@ impl AfterHours {
         validate_city_id(&city_id);
         crate::checkpoint::validate_id(&arc_id, "INVALID_ARC_ID");
         crate::checkpoint::validate_id(&server_id, "INVALID_SERVER_ID");
-        for item_id in totals_items.keys() {
-            crate::checkpoint::validate_id(item_id, "INVALID_ITEM_ID");
-        }
         require!(!self.cities.contains_key(&city_id), "DUPLICATE_CITY_ID");
-        require!(self.arcs.contains_key(&arc_id), "UNREGISTERED_ARC");
+        let arc = self.arcs.get(&arc_id).expect("UNREGISTERED_ARC");
         crate::mt::validate_receiver_id(&owner);
+
+        require!(totals_items.len() <= 32, "TOO_MANY_TOTALS_ITEMS");
+        for (item_id, total) in &totals_items {
+            crate::checkpoint::validate_item_id(item_id);
+            require!(arc.contains_item(item_id), "UNREGISTERED_ITEM");
+            require!(
+                total.0 <= crate::constants::MAX_GENESIS_ITEM_TOTAL,
+                "GENESIS_TOTAL_TOO_LARGE"
+            );
+        }
+        require!(
+            total_coin.0 <= crate::constants::MAX_GENESIS_COIN_TOTAL,
+            "GENESIS_TOTAL_TOO_LARGE"
+        );
 
         require!(is_valid_hex_64(&state_root), "INVALID_STATE_ROOT");
         require!(is_valid_hex_64(&city_root), "INVALID_CITY_ROOT");
@@ -76,7 +87,6 @@ impl AfterHours {
             require!(is_valid_hex_64(pr), "INVALID_PARENT_ROOT");
         }
 
-        require!(totals_items.len() <= 32, "TOO_MANY_TOTALS_ITEMS");
 
         let record = CityRecord {
             city_id: city_id.clone(),

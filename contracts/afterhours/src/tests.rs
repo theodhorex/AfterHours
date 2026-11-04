@@ -3,6 +3,7 @@ use super::*;
 use near_sdk::json_types::U128;
 use near_sdk::test_utils::{get_logs, VMContextBuilder};
 use near_sdk::{testing_env, AccountId, NearToken};
+use std::collections::BTreeMap;
 
 fn acc(s: &str) -> AccountId {
     s.parse().unwrap()
@@ -814,4 +815,145 @@ fn test_create_city_invalid_totals_item_key_fails() {
     set_caller("operator.testnet");
     register_default_arc(&mut contract, "arc_1");
     create_city_with(&mut contract, "arc_1", "server_1", "Bad Item");
+}
+
+#[test]
+#[should_panic(expected = "INVALID_ITEM_ID")]
+fn test_item_id_coin_rejected_in_arc() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    let mut prod = BTreeMap::new();
+    prod.insert("coin".to_string(), U128(10));
+    contract.register_arc(
+        "arc_test".to_string(),
+        prod,
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        U128(100),
+        U128(100),
+    );
+}
+
+#[test]
+#[should_panic(expected = "INVALID_ITEM_ID")]
+fn test_item_id_coin_rejected_in_city_totals() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+    create_city_with(&mut contract, "arc_1", "server_1", "coin");
+}
+
+#[test]
+#[should_panic(expected = "CAP_EXCEEDS_MAX")]
+fn test_register_arc_cap_exceeds_max_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    let mut prod = BTreeMap::new();
+    prod.insert("bread".to_string(), U128((1u128 << 100) + 1));
+    contract.register_arc(
+        "arc_test".to_string(),
+        prod,
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        U128(100),
+        U128(100),
+    );
+}
+
+#[test]
+fn test_zero_balance_and_empty_tokens_for_owner_removed() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller_with_deposit("bob.testnet", constants::STORAGE_DEPOSIT_MIN.as_yoctonear());
+    contract.storage_deposit(None);
+
+    set_caller_with_deposit("carol.testnet", constants::STORAGE_DEPOSIT_MIN.as_yoctonear());
+    contract.storage_deposit(None);
+
+    contract.mint_internal(&acc("bob.testnet"), "bread", 100);
+    assert!(contract.balances.contains_key(&(acc("bob.testnet"), "bread".to_string())));
+    assert!(contract.tokens_for_owner.contains_key(&acc("bob.testnet")));
+
+    // Burn all
+    contract.burn_internal(&acc("bob.testnet"), "bread", 100);
+    assert!(!contract.balances.contains_key(&(acc("bob.testnet"), "bread".to_string())));
+    assert!(!contract.tokens_for_owner.contains_key(&acc("bob.testnet")));
+
+    // Test via transfer
+    contract.mint_internal(&acc("bob.testnet"), "bread", 50);
+    set_caller_with_deposit("bob.testnet", 1);
+    contract.mt_transfer(acc("carol.testnet"), "bread".to_string(), U128(50), None, None);
+    assert!(!contract.balances.contains_key(&(acc("bob.testnet"), "bread".to_string())));
+    assert!(!contract.tokens_for_owner.contains_key(&acc("bob.testnet")));
+}
+
+#[test]
+#[should_panic(expected = "GENESIS_TOTAL_TOO_LARGE")]
+fn test_create_city_genesis_item_total_too_large_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+    let mut totals = BTreeMap::new();
+    totals.insert("bread".to_string(), U128(10_000_001));
+    contract.create_city(
+        "city-genesis-large".to_string(),
+        "arc_1".to_string(),
+        "server_1".to_string(),
+        acc("alice.testnet"),
+        VALID_HEX64_A.to_string(),
+        VALID_HEX64_B.to_string(),
+        None,
+        totals,
+        U128(1_000),
+    );
+}
+
+#[test]
+#[should_panic(expected = "GENESIS_TOTAL_TOO_LARGE")]
+fn test_create_city_genesis_coin_total_too_large_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+    let mut totals = BTreeMap::new();
+    totals.insert("bread".to_string(), U128(1_000));
+    contract.create_city(
+        "city-genesis-coin-large".to_string(),
+        "arc_1".to_string(),
+        "server_1".to_string(),
+        acc("alice.testnet"),
+        VALID_HEX64_A.to_string(),
+        VALID_HEX64_B.to_string(),
+        None,
+        totals,
+        U128(100_000_001),
+    );
+}
+
+#[test]
+#[should_panic(expected = "UNREGISTERED_ITEM")]
+fn test_create_city_unregistered_item_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    set_caller("operator.testnet");
+    register_default_arc(&mut contract, "arc_1");
+    let mut totals = BTreeMap::new();
+    totals.insert("unregistered_gems".to_string(), U128(100));
+    contract.create_city(
+        "city-unregistered-item".to_string(),
+        "arc_1".to_string(),
+        "server_1".to_string(),
+        acc("alice.testnet"),
+        VALID_HEX64_A.to_string(),
+        VALID_HEX64_B.to_string(),
+        None,
+        totals,
+        U128(1_000),
+    );
 }

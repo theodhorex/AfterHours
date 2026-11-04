@@ -34,6 +34,11 @@ pub(crate) fn validate_id(id: &str, err_msg: &str) {
     );
 }
 
+pub(crate) fn validate_item_id(id: &str) {
+    validate_id(id, "INVALID_ITEM_ID");
+    require!(id != "coin", "INVALID_ITEM_ID");
+}
+
 #[near(serializers=[borsh, json])]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArcCaps {
@@ -44,6 +49,15 @@ pub struct ArcCaps {
     pub sink_cap_per_step: BTreeMap<String, U128>,
     pub coin_source_cap_per_step: U128,
     pub coin_sink_cap_per_step: U128,
+}
+
+impl ArcCaps {
+    pub fn contains_item(&self, item_id: &str) -> bool {
+        self.produce_cap_per_step.contains_key(item_id)
+            || self.consume_cap_per_step.contains_key(item_id)
+            || self.source_cap_per_step.contains_key(item_id)
+            || self.sink_cap_per_step.contains_key(item_id)
+    }
 }
 
 #[near(serializers=[borsh, json])]
@@ -117,18 +131,28 @@ impl AfterHours {
         require!(source_cap_per_step.len() <= 32, "TOO_MANY_ITEMS");
         require!(sink_cap_per_step.len() <= 32, "TOO_MANY_ITEMS");
 
-        for item_id in produce_cap_per_step.keys() {
-            validate_id(item_id, "INVALID_ITEM_ID");
+        let check_cap = |val: &U128| {
+            require!(val.0 <= crate::constants::MAX_ARC_CAP, "CAP_EXCEEDS_MAX");
+        };
+
+        for (item_id, cap) in &produce_cap_per_step {
+            validate_item_id(item_id);
+            check_cap(cap);
         }
-        for item_id in consume_cap_per_step.keys() {
-            validate_id(item_id, "INVALID_ITEM_ID");
+        for (item_id, cap) in &consume_cap_per_step {
+            validate_item_id(item_id);
+            check_cap(cap);
         }
-        for item_id in source_cap_per_step.keys() {
-            validate_id(item_id, "INVALID_ITEM_ID");
+        for (item_id, cap) in &source_cap_per_step {
+            validate_item_id(item_id);
+            check_cap(cap);
         }
-        for item_id in sink_cap_per_step.keys() {
-            validate_id(item_id, "INVALID_ITEM_ID");
+        for (item_id, cap) in &sink_cap_per_step {
+            validate_item_id(item_id);
+            check_cap(cap);
         }
+        check_cap(&coin_source_cap_per_step);
+        check_cap(&coin_sink_cap_per_step);
 
         let caps = ArcCaps {
             arc_id: arc_id.clone(),
@@ -208,10 +232,12 @@ impl AfterHours {
         }
 
         // 5. Arc production, consumption, source, sink, and coin caps
+        require!(cp.items.len() <= 32, "TOO_MANY_ITEMS");
         let arc = self.arcs.get(&city.arc_id).expect("ARC_NOT_FOUND");
         let steps_u128 = steps as u128;
         for (item_id, flow) in &cp.items {
-            validate_id(item_id, "INVALID_ITEM_ID");
+            validate_item_id(item_id);
+            require!(arc.contains_item(item_id), "UNREGISTERED_ITEM");
             let prod_cap = arc.produce_cap_per_step.get(item_id).map(|u| u.0).unwrap_or(0);
             let cons_cap = arc.consume_cap_per_step.get(item_id).map(|u| u.0).unwrap_or(0);
             let source_cap = arc.source_cap_per_step.get(item_id).map(|u| u.0).unwrap_or(0);
@@ -233,6 +259,11 @@ impl AfterHours {
 
             let max_sunk = sink_cap.checked_mul(steps_u128).expect("CAP_OVERFLOW");
             require!(flow.sunk.0 <= max_sunk, "SINK_CAP_EXCEEDED");
+            // Players can only receive what the city is allowed to sink (mitigation for review finding 1).
+            require!(
+                flow.trade_to_players.0 <= max_sunk,
+                "TRADE_TO_PLAYERS_EXCEEDS_SINK_CAP"
+            );
         }
 
         let max_coin_sourced = arc.coin_source_cap_per_step.0.checked_mul(steps_u128).expect("CAP_OVERFLOW");
@@ -259,6 +290,7 @@ impl AfterHours {
             let new_total = additions.checked_sub(deductions).expect("CONSERVATION_UNDERFLOW");
             new_totals_items.insert(item_id.clone(), U128(new_total));
         }
+        require!(new_totals_items.len() <= 32, "TOO_MANY_TOTALS_ITEMS");
 
         // Coin conservation:
         let old_coin = city.total_coin.0;
@@ -274,7 +306,7 @@ impl AfterHours {
 
         // 7. Player deltas validation
         require!(
-            cp.player_deltas.len() <= 256,
+            cp.player_deltas.len() <= crate::constants::MAX_PLAYER_DELTAS_PER_CHECKPOINT,
             "TOO_MANY_PLAYER_DELTAS"
         );
 

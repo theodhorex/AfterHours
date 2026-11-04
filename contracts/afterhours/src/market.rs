@@ -66,7 +66,7 @@ impl AfterHours {
 
     /// Buys an active city listing using attached NEAR deposit.
     #[payable]
-    pub fn buy_city(&mut self, city_id: String) {
+    pub fn buy_city(&mut self, city_id: String, expected_city_root: String) {
         let listing = self
             .listings
             .get(&city_id)
@@ -80,14 +80,17 @@ impl AfterHours {
         let buyer = env::predecessor_account_id();
         require!(buyer != listing.seller, "SELF_PURCHASE");
 
-        // Checks-Effects-Interactions: state changes before external calls
-        self.listings.remove(&city_id);
-
         let mut city = self
             .cities
             .get(&city_id)
             .cloned()
             .unwrap_or_else(|| env::panic_str("NO_CITY"));
+        require!(city.city_root == expected_city_root, "CITY_ROOT_CHANGED");
+        require!(city.owner == listing.seller, "SELLER_NOT_CITY_OWNER");
+
+        // Checks-Effects-Interactions: state changes before external calls
+        self.listings.remove(&city_id);
+
         city.owner = buyer.clone();
         self.cities.insert(city_id.clone(), city);
 
@@ -101,12 +104,86 @@ impl AfterHours {
             }),
         );
 
-        // Interactions: transfer purchase price to seller and refund excess to buyer
-        Promise::new(listing.seller).transfer(price).detach();
+        // Interactions: transfer purchase price to seller and refund excess to buyer with callback
+        Promise::new(listing.seller.clone())
+            .transfer(price)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(near_sdk::Gas::from_tgas(5))
+                    .on_payout(listing.seller.clone(), price),
+            )
+            .detach();
 
         let refund = deposit.saturating_sub(price);
         if refund.as_yoctonear() > 0 {
-            Promise::new(buyer).transfer(refund).detach();
+            Promise::new(buyer.clone())
+                .transfer(refund)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(near_sdk::Gas::from_tgas(5))
+                        .on_payout(buyer.clone(), refund),
+                )
+                .detach();
         }
+    }
+
+    /// Callback for purchase payout or refund transfer. Records claimable balance on failure.
+    #[private]
+    pub fn on_payout(
+        &mut self,
+        account_id: AccountId,
+        amount: NearToken,
+        #[callback_result] result: Result<(), near_sdk::PromiseError>,
+    ) {
+        if result.is_err() {
+            let cur = self
+                .claimable
+                .get(&account_id)
+                .copied()
+                .unwrap_or(NearToken::from_yoctonear(0));
+            let new_amount = NearToken::from_yoctonear(
+                cur.as_yoctonear().saturating_add(amount.as_yoctonear()),
+            );
+            self.claimable.insert(account_id.clone(), new_amount);
+            crate::emit(
+                "payout_failed",
+                serde_json::json!({
+                    "account_id": account_id,
+                    "amount": amount.as_yoctonear().to_string(),
+                }),
+            );
+        }
+    }
+
+    /// Withdraw accumulated claimable balance from failed payouts or refunds.
+    pub fn withdraw_claimable(&mut self) -> Promise {
+        let caller = env::predecessor_account_id();
+        let amount = self
+            .claimable
+            .get(&caller)
+            .copied()
+            .unwrap_or(NearToken::from_yoctonear(0));
+        require!(amount.as_yoctonear() > 0, "NO_CLAIMABLE_BALANCE");
+        self.claimable.remove(&caller);
+
+        crate::emit(
+            "claimable_withdrawn",
+            serde_json::json!({
+                "account_id": caller,
+                "amount": amount.as_yoctonear().to_string(),
+            }),
+        );
+
+        Promise::new(caller).transfer(amount)
+    }
+
+    /// View claimable balance for an account in yoctoNEAR.
+    pub fn get_claimable(&self, account_id: AccountId) -> U128 {
+        U128(
+            self.claimable
+                .get(&account_id)
+                .map(|t| t.as_yoctonear())
+                .unwrap_or(0),
+        )
     }
 }

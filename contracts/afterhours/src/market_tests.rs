@@ -176,7 +176,7 @@ fn test_listing_escrow_and_buy_flow() {
 
     // Bob buys city with 5 NEAR
     set_caller_with_deposit("bob.testnet", 5_000_000_000_000_000_000_000_000);
-    contract.buy_city("neo-tokyo".to_string());
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
 
     // Owner changed
     let city = contract.get_city("neo-tokyo".to_string()).expect("city must exist");
@@ -212,11 +212,11 @@ fn test_second_buy_fails_no_listing() {
     contract.list_city("neo-tokyo".to_string(), U128(5_000_000_000_000_000_000_000_000));
 
     set_caller_with_deposit("bob.testnet", 5_000_000_000_000_000_000_000_000);
-    contract.buy_city("neo-tokyo".to_string());
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
 
     // Second buy attempt by carol
     set_caller_with_deposit("carol.testnet", 5_000_000_000_000_000_000_000_000);
-    contract.buy_city("neo-tokyo".to_string());
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn test_buy_underpay_rejected_with_state_unchanged() {
     // Underpay attempt fails
     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         set_caller_with_deposit("bob.testnet", 4_000_000_000_000_000_000_000_000);
-        contract.buy_city("neo-tokyo".to_string());
+        contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
     }));
     assert!(res.is_err());
 
@@ -255,7 +255,7 @@ fn test_buy_excess_refunded() {
 
     // Bob attaches 7 NEAR (excess 2 NEAR)
     set_caller_with_deposit("bob.testnet", 7_000_000_000_000_000_000_000_000);
-    contract.buy_city("neo-tokyo".to_string());
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
 
     let receipts = get_created_receipts();
     // Seller gets 5 NEAR
@@ -289,7 +289,7 @@ fn test_cancelled_listing_cannot_be_bought() {
     contract.cancel_listing("neo-tokyo".to_string());
 
     set_caller_with_deposit("bob.testnet", 5_000_000_000_000_000_000_000_000);
-    contract.buy_city("neo-tokyo".to_string());
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
 }
 
 #[test]
@@ -303,7 +303,7 @@ fn test_sold_city_cannot_be_listed_by_old_owner() {
     contract.list_city("neo-tokyo".to_string(), U128(5_000_000_000_000_000_000_000_000));
 
     set_caller_with_deposit("bob.testnet", 5_000_000_000_000_000_000_000_000);
-    contract.buy_city("neo-tokyo".to_string());
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
 
     // Alice tries to list it again
     set_caller("alice.testnet");
@@ -322,5 +322,68 @@ fn test_buy_city_self_purchase_rejected() {
 
     // Alice tries to buy her own city
     set_caller_with_deposit("alice.testnet", 5_000_000_000_000_000_000_000_000);
-    contract.buy_city("neo-tokyo".to_string());
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
+}
+
+#[test]
+#[should_panic(expected = "SELLER_NOT_CITY_OWNER")]
+fn test_buy_city_seller_not_owner_rejected() {
+    set_caller("operator.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_test_city(&mut contract, "neo-tokyo", "alice.testnet");
+
+    set_caller("alice.testnet");
+    contract.list_city("neo-tokyo".to_string(), U128(5_000_000_000_000_000_000_000_000));
+
+    // Manually desync city owner to simulate if city owner changed
+    let mut city = contract.cities.get("neo-tokyo").cloned().unwrap();
+    city.owner = acc("charlie.testnet");
+    contract.cities.insert("neo-tokyo".to_string(), city);
+
+    set_caller_with_deposit("bob.testnet", 5_000_000_000_000_000_000_000_000);
+    contract.buy_city("neo-tokyo".to_string(), HEX_B.to_string());
+}
+
+#[test]
+#[should_panic(expected = "CITY_ROOT_CHANGED")]
+fn test_buy_city_root_changed_rejected() {
+    set_caller("operator.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    setup_test_city(&mut contract, "neo-tokyo", "alice.testnet");
+
+    set_caller("alice.testnet");
+    contract.list_city("neo-tokyo".to_string(), U128(5_000_000_000_000_000_000_000_000));
+
+    // Bob tries to buy with outdated city_root
+    set_caller_with_deposit("bob.testnet", 5_000_000_000_000_000_000_000_000);
+    contract.buy_city("neo-tokyo".to_string(), HEX_A.to_string());
+}
+
+#[test]
+fn test_payout_failure_records_claimable_and_withdraw() {
+    set_caller("afterhours.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+
+    // Simulate callback on payout failure
+    contract.on_payout(
+        acc("alice.testnet"),
+        NearToken::from_yoctonear(5_000_000),
+        Err(near_sdk::PromiseError::Failed),
+    );
+
+    assert_eq!(contract.get_claimable(acc("alice.testnet")), U128(5_000_000));
+
+    // Alice withdraws claimable balance
+    set_caller("alice.testnet");
+    let _ = contract.withdraw_claimable();
+
+    assert_eq!(contract.get_claimable(acc("alice.testnet")), U128(0));
+}
+
+#[test]
+#[should_panic(expected = "NO_CLAIMABLE_BALANCE")]
+fn test_withdraw_claimable_zero_fails() {
+    set_caller("alice.testnet");
+    let mut contract = AfterHours::new(acc("operator.testnet"));
+    let _ = contract.withdraw_claimable();
 }

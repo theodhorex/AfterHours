@@ -9,6 +9,10 @@ pub mod constants {
     pub const MAX_ORDER_IDS_PER_CHECKPOINT: usize = 256;
     pub const MAX_STAGE: u8 = 4;
     pub const STORAGE_DEPOSIT_MIN: NearToken = NearToken::from_yoctonear(10_000_000_000_000_000_000_000);
+    pub const MAX_ARC_CAP: u128 = 1u128 << 100;
+    pub const MAX_GENESIS_ITEM_TOTAL: u128 = 10_000_000;
+    pub const MAX_GENESIS_COIN_TOTAL: u128 = 100_000_000;
+    pub const MAX_PLAYER_DELTAS_PER_CHECKPOINT: usize = 40;
 }
 
 pub mod checkpoint;
@@ -47,6 +51,7 @@ pub struct AfterHours {
     pub executed_orders: LookupSet<String>,
     pub registered_accounts: LookupSet<AccountId>,
     pub listings: LookupMap<String, Listing>,
+    pub claimable: LookupMap<AccountId, near_sdk::NearToken>,
 }
 
 #[near]
@@ -65,6 +70,7 @@ impl AfterHours {
             executed_orders: LookupSet::new(b"e"),
             registered_accounts: LookupSet::new(b"r"),
             listings: LookupMap::new(b"l"),
+            claimable: LookupMap::new(b"k"),
         }
     }
 
