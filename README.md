@@ -36,7 +36,7 @@ You need Node 24 or newer. No install step for the simulation (TypeScript runs n
 node --test packages/sim/test/         # simulation, caravans, growth (162 tests, 2026-11-04)
 node --test packages/verify/test/      # replay verifier
 cd apps/web && node --test test/       # web logic, audit, a11y (109 tests)
-cd contracts/afterhours && cargo test --lib   # contract (80 tests)
+cd contracts/afterhours && cargo test --lib   # contract (95 tests)
 ```
 
 **Replay a checkpoint file against the engine.**
@@ -110,13 +110,13 @@ sequenceDiagram
 |---|---|---|---|
 | T1 | Operator edits history | hash chain plus replay, first differing step reported | `tamper`, `root_vectors` |
 | T2 | Operator inflates the city economy | per-arc caps on produced, consumed, sourced, sunk; per-checkpoint conservation | `checkpoint_tests` |
-| T3 | Operator mints player assets | **partial**: genesis totals and `trade_to_players` are operator-declared; capping them is in progress | review finding 1 |
+| T3 | Operator mints player assets | **mitigated, not closed**: genesis totals are bounded and item ids must belong to the arc; items sent to players per checkpoint cannot exceed the arc sink cap times the steps. Full escrow of player deposits is still open | `checkpoint_tests`, review finding 1 |
 | T4 | Selling a city you do not own | owner check in `list_city` | `market_tests` |
 | T5 | Storage drain through dust transfers | `storage_deposit` required for receivers | `RECEIVER_NOT_REGISTERED` tests |
 | T6 | TS and Rust disagree on caps or shapes | differential tests against a generated fixture | `arc_caps_fixture`, `differential_tests` |
 | T7 | Replay of an old checkpoint | `from_step` must equal the stored step | `checkpoint_tests` |
 
-An independent review of the contract (a different model from the one that wrote the code) found 14 issues on 2026-11-04: 1 high (T3), 4 medium, the rest low or informational. Fixes are scheduled and tracked in the Progress Log.
+An independent review of the contract (a different model from the one that wrote the code) found 14 issues on 2026-11-04: 1 high (T3), 4 medium, the rest low or informational. The fixes (bounds, root-pinned purchases, callback payouts with a claimable balance, capped mints) landed the same day; see the Progress Log.
 
 ## Measured on Testnet
 
@@ -146,7 +146,7 @@ These transactions were made by the engine version of 2026-11-04 afternoon. The 
 ## Limits, Stated Plainly
 
 - **Testnet only.** No real funds, no mainnet deployment, no token launch.
-- **The operator is trusted for availability, ordering and fairness of orders.** History is checkable by replay and the city economy is conserved on-chain. But genesis totals and player-bound transfers are still operator-declared today (finding 1 of the review).
+- **The operator is trusted for availability, ordering and fairness of orders.** History is checkable by replay and the city economy is conserved on-chain. Genesis totals and player-bound transfers are now capped but still operator-declared; full escrow of player deposits is not built yet (finding 1 of the review).
 - **City sales are paid in NEAR on testnet, not in game coin.** The sale price is not part of the replayed economy.
 - **Caravans are checked per city, not settled jointly on-chain.** Each city's checkpoint must conserve; the contract does not see the counterparty.
 - **The economy is tuned, not proven.** Stage and population reach differ per arc and seed; see the Progress Log for the current numbers. We make no claim of emergent behaviour.
@@ -163,7 +163,8 @@ Updated after each accepted milestone.
 | 2026-11-04 | City market, TS vs Rust differential tests, browser Audit against the NEAR root |
 | 2026-11-04 | Four arc themes, icon bubbles, inter-city caravans (library, world runner, web panel), clean production build from a fresh copy |
 | 2026-11-04 | Accessibility pass: AA contrast, 44 px touch targets, scroll regions, live status, reduced motion |
-| 2026-11-04 | Independent contract review: 14 findings (1 high, 4 medium); fixes in progress |
+| 2026-11-04 | Independent contract review: 14 findings (1 high, 4 medium) |
+| 2026-11-04 | Contract fixes: item and cap bounds, `buy_city` pinned to the audited root, callback payouts with `claimable` balance, mint cap (95 contract tests) |
 | 2026-11-04 | Growth engine fix: a stock-cap rule mismatch closed healthy businesses. Dino Vale now reaches stage 4 on three seeds, Cave Hold stage 2; Elf Grove still stalls at stage 1 (in progress) |
 
 ## Repository Layout
