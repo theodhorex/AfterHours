@@ -145,7 +145,7 @@ The transaction table for the republished cities will be added here with explore
 | Threat | Defence | Test |
 |---|---|---|
 | Operator edits history | hash chain plus replay | tamper test, `MISMATCH` |
-| Operator mints items or coin | on-chain conservation and per-arc caps | contract tests (80) |
+| Operator inflates the economy | produced, consumed, sourced and sunk are capped per arc and conserved per checkpoint. **Not yet covered:** items sent to players (`trade_to_players`) and city genesis totals are operator-declared and uncapped, so a hostile operator could still mint player assets (found by the independent review, fix in progress) | contract tests (80), review findings 1 and 5 |
 | Selling someone else's city | owner check on `list_city` | market tests |
 | Storage drain by dust transfers | `storage_deposit` required for receivers | `RECEIVER_NOT_REGISTERED` tests |
 | TS and Rust disagree on caps or shapes | differential tests against a generated fixture | `arc_caps_fixture`, `differential_tests` |
@@ -176,7 +176,7 @@ docs/        data contract
 - [ ] Independent contract security review (in progress) and web accessibility pass (in progress)
 - [ ] Contract-side caravan settlement (today caravans are checked per city only)
 
-**One limitation worth naming:** the operator is trusted for availability, ordering and fairness of orders, not for conservation or history. City sales are paid in NEAR on testnet, not in game coin, and the sale price is not part of the replayed economy.
+**One limitation worth naming:** the operator is trusted for availability, ordering and fairness of orders. History is checkable by replay, and conservation of the city economy is enforced on-chain, but player-bound transfers and genesis totals are still operator-declared today (an independent review flagged this; see Threat Model). City sales are paid in NEAR on testnet, not in game coin, and the sale price is not part of the replayed economy.
 
 ## Progress Log
 
@@ -188,6 +188,7 @@ Updated after each accepted milestone.
 | 2026-11-04 | First testnet city: on-chain state root matched the local replay at step 200 |
 | 2026-11-04 | City market (`list_city`, `buy_city`), TS vs Rust differential tests, browser Audit against the NEAR root |
 | 2026-11-04 | Four arc themes, icon bubbles, inter-city caravans (library, world runner, web panel), clean production build |
+| 2026-11-04 | Independent contract review (14 findings, 1 high on operator trust, 4 medium); fixes scheduled |
 | 2026-11-04 | In progress: growth engine fix for stalled cities, contract security review, accessibility pass, republish of four cities |
 
 ## Hackathon Notes
