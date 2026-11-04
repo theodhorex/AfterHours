@@ -13,10 +13,12 @@ pub mod constants {
 
 pub mod checkpoint;
 pub mod city;
+pub mod market;
 pub mod mt;
 
 pub use checkpoint::{ArcCaps, Checkpoint, CoinFlow, ItemFlow, PlayerDelta};
 pub use city::CityRecord;
+pub use market::Listing;
 pub use mt::{StorageBalance, StorageBalanceBounds};
 
 const EVENT_STANDARD: &str = "afterhours";
@@ -44,6 +46,7 @@ pub struct AfterHours {
     pub arcs: LookupMap<String, ArcCaps>,
     pub executed_orders: LookupSet<String>,
     pub registered_accounts: LookupSet<AccountId>,
+    pub listings: LookupMap<String, Listing>,
 }
 
 #[near]
@@ -61,6 +64,7 @@ impl AfterHours {
             arcs: LookupMap::new(b"a"),
             executed_orders: LookupSet::new(b"e"),
             registered_accounts: LookupSet::new(b"r"),
+            listings: LookupMap::new(b"l"),
         }
     }
 
@@ -90,3 +94,5 @@ impl AfterHours {
 mod tests;
 #[cfg(test)]
 mod checkpoint_tests;
+#[cfg(test)]
+mod market_tests;
