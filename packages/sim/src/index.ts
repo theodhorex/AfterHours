@@ -3,3 +3,5 @@ export * from "./hash.ts";
 export * from "./prng.ts";
 export * from "./types.ts";
 export * from "./arc.ts";
+export * from "./genesis.ts";
+export * from "./roots.ts";

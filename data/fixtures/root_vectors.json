@@ -1,0 +1,144 @@
+{
+  "state": {
+    "city_id": "vector_haven",
+    "arc_id": "cave_hold",
+    "step": "0",
+    "world_seed": "vector_seed_999",
+    "stage": "0",
+    "sectors": [
+      {
+        "idx": "0",
+        "kind": "food",
+        "owner": null,
+        "arc_origin": "cave_hold",
+        "businesses": [
+          {
+            "id": "bakery-0",
+            "recipe": "bakery",
+            "open": true,
+            "coin": "300",
+            "inventory": {
+              "bread": "10"
+            },
+            "insolvent_steps": "0"
+          },
+          {
+            "id": "farm-0",
+            "recipe": "farm",
+            "open": true,
+            "coin": "250",
+            "inventory": {},
+            "insolvent_steps": "0"
+          }
+        ],
+        "rules": []
+      },
+      {
+        "idx": "1",
+        "kind": "ore",
+        "owner": null,
+        "arc_origin": "cave_hold",
+        "businesses": [
+          {
+            "id": "mine-0",
+            "recipe": "mine",
+            "open": true,
+            "coin": "300",
+            "inventory": {
+              "ore": "5"
+            },
+            "insolvent_steps": "0"
+          }
+        ],
+        "rules": []
+      },
+      {
+        "idx": "2",
+        "kind": "forge",
+        "owner": null,
+        "arc_origin": "cave_hold",
+        "businesses": [],
+        "rules": []
+      },
+      {
+        "idx": "3",
+        "kind": "alchemy",
+        "owner": null,
+        "arc_origin": "cave_hold",
+        "businesses": [],
+        "rules": []
+      },
+      {
+        "idx": "4",
+        "kind": "harbor",
+        "owner": "lord_aldric",
+        "arc_origin": "cave_hold",
+        "businesses": [
+          {
+            "id": "fisher-0",
+            "recipe": "fisher",
+            "open": false,
+            "coin": "100",
+            "inventory": {
+              "fish": "20"
+            },
+            "insolvent_steps": "1"
+          }
+        ],
+        "rules": []
+      },
+      {
+        "idx": "5",
+        "kind": "tower",
+        "owner": null,
+        "arc_origin": "cave_hold",
+        "businesses": [],
+        "rules": []
+      }
+    ],
+    "citizens": {
+      "population": "220",
+      "satisfaction_bps": "8000",
+      "purse": "2200"
+    },
+    "market": {
+      "price": {
+        "bread": "13",
+        "fish": "10",
+        "ore": "12"
+      },
+      "demand_ema": {
+        "bread": "0",
+        "fish": "0",
+        "ore": "0"
+      }
+    },
+    "treasury": "0",
+    "totals": {
+      "items": {
+        "bread": "10",
+        "fish": "20",
+        "ore": "5"
+      },
+      "coin": "3150"
+    }
+  },
+  "businesses_roots": [
+    "8bf37221912ce6d2db266fdfef3004bb9f185c3a1cf3f15849a38ffbbfd7628f",
+    "7128b9a1d1d039f86aa53af1be71c3e3aa360c9c800119f63158fe3fc7d382ef",
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "78fd9604e1e63dfaab43b562c5608519e75977b7ba628c5e1b12e6e99486449d",
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  ],
+  "sector_roots": [
+    "aa9d3c7ed3d235256e83d9461fa238f9b37f1a8c402acac3a827af1475aae508",
+    "dd86d37a6516425bfec46687a8116016b145cd0d5e7e756ff4acb64a2fc10b87",
+    "e7b0392cd6891a4a53335c1cb9392d936d999a370596c517c558f22e0a9e10f9",
+    "fa11e819127f9345c02ca14a83a9d7fd422d12c230f747b1e03f4aacbfdb3636",
+    "76c829d5fca878268f449b00815a80e0056b605e87bf39fbad9876f23aaa5717",
+    "b425a4381b92d533138617a3c71e88f1134163a29a196ba4bd1d391118242c1a"
+  ],
+  "city_core": "83ee7ff695dc11d68e80e42aa82bcffbafa8b8cf4bbd4f95f005654f0e7eae66",
+  "city_root": "c1ec6201efdd6d25dd4e3ce38b408ad8c9674acf873651dc36db6e07c956681f"
+}
