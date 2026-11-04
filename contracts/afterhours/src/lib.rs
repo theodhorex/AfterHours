@@ -96,3 +96,5 @@ mod tests;
 mod checkpoint_tests;
 #[cfg(test)]
 mod market_tests;
+#[cfg(test)]
+mod differential_tests;

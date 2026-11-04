@@ -1,0 +1,126 @@
+{
+  "city_id": "city-goblin_warrens",
+  "coin": {
+    "sourced": "0",
+    "sunk": "0",
+    "trade_from_players": "0",
+    "trade_to_players": "0"
+  },
+  "executed_order_ids": [],
+  "from_step": 0,
+  "items": {
+    "bread": {
+      "consumed_pop": "2910",
+      "consumed_recipe": "0",
+      "produced": "2910",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "crystal": {
+      "consumed_pop": "0",
+      "consumed_recipe": "109",
+      "produced": "200",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "elixir": {
+      "consumed_pop": "14",
+      "consumed_recipe": "0",
+      "produced": "53",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "fish": {
+      "consumed_pop": "838",
+      "consumed_recipe": "0",
+      "produced": "1114",
+      "sourced": "0",
+      "sunk": "64",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "flour": {
+      "consumed_pop": "0",
+      "consumed_recipe": "1455",
+      "produced": "1588",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "gadget": {
+      "consumed_pop": "0",
+      "consumed_recipe": "0",
+      "produced": "24",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "grain": {
+      "consumed_pop": "0",
+      "consumed_recipe": "3229",
+      "produced": "3795",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "ingot": {
+      "consumed_pop": "0",
+      "consumed_recipe": "63",
+      "produced": "140",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "ore": {
+      "consumed_pop": "0",
+      "consumed_recipe": "280",
+      "produced": "416",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "scrap": {
+      "consumed_pop": "0",
+      "consumed_recipe": "111",
+      "produced": "386",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "scroll": {
+      "consumed_pop": "0",
+      "consumed_recipe": "0",
+      "produced": "32",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    },
+    "tool": {
+      "consumed_pop": "52",
+      "consumed_recipe": "0",
+      "produced": "63",
+      "sourced": "0",
+      "sunk": "0",
+      "trade_from_players": "0",
+      "trade_to_players": "0"
+    }
+  },
+  "new_city_root": "c63ee5184cff6e90f4e2c05f04096c8302e827efb87d38e69a87856af917943d",
+  "new_state_root": "899e88b035b0728afaddda09873e0c97ba9bd99a9e5884ad8a5d5dff27b8d2a4",
+  "player_deltas": [],
+  "stage": 0,
+  "to_step": 40
+}
