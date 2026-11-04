@@ -7,6 +7,7 @@ import { genesisPrevRoot, nextStateRoot, cityRoot, eventRoot } from "./roots.ts"
 import { step } from "./step.ts";
 import type { ArcFile, CityState, SimEvent } from "./types.ts";
 import type { PricingRules } from "./pricing.ts";
+import type { GrowthRules } from "./growth.ts";
 
 export interface RunStepsResult {
   state: CityState;
@@ -17,7 +18,7 @@ export interface RunStepsResult {
 export function runSteps(
   state: CityState,
   n: number,
-  ctx: { arc: ArcFile; pricing: PricingRules },
+  ctx: { arc: ArcFile; pricing: PricingRules; growth: GrowthRules },
   prevRoot?: string
 ): RunStepsResult {
   let currState = state;

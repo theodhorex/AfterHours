@@ -5,11 +5,15 @@ import { join } from "node:path";
 import { parseArc } from "../src/arc.ts";
 import { genesis } from "../src/genesis.ts";
 import { parsePricingRules } from "../src/pricing.ts";
+import { parseGrowthRules } from "../src/growth.ts";
 import { step, flowsFromEvents } from "../src/step.ts";
 import { runSteps } from "../src/run.ts";
 
 const pricingJson = readFileSync(join(process.cwd(), "data/pricing.rules.json"), "utf-8");
 const pricing = parsePricingRules(pricingJson);
+
+const growthJson = readFileSync(join(process.cwd(), "data/growth.rules.json"), "utf-8");
+const growth = parseGrowthRules(growthJson);
 
 const goblinArcJson = readFileSync(join(process.cwd(), "data/arcs/goblin_warrens.json"), "utf-8");
 const goblinArc = parseArc(JSON.parse(goblinArcJson));
@@ -20,7 +24,7 @@ const caveArc = parseArc(JSON.parse(caveArcJson));
 test("T01: item conservation over 200 steps for BOTH real arcs", () => {
   for (const arc of [goblinArc, caveArc]) {
     const s0 = genesis(arc, "city-test", "seed-42");
-    const { state: sFinal, events } = runSteps(s0, 200, { arc, pricing });
+    const { state: sFinal, events } = runSteps(s0, 200, { arc, pricing, growth });
 
     const flows = flowsFromEvents(events);
 
@@ -65,7 +69,7 @@ test("T02: total coin is constant for 200 steps for BOTH real arcs", () => {
 
     let curr = s0;
     for (let stepIdx = 0; stepIdx < 200; stepIdx++) {
-      const { state: nextState } = step(curr, { arc, pricing });
+      const { state: nextState } = step(curr, { arc, pricing, growth });
 
       let sumBusinessCoin = 0n;
       for (const sec of nextState.sectors) {
@@ -95,8 +99,8 @@ test("T03: determinism and purity", () => {
   const s0 = genesis(goblinArc, "city-det", "seed-99");
   const s0Copy = JSON.parse(JSON.stringify(s0, (_, v) => (typeof v === "bigint" ? v.toString() : v)));
 
-  const run1 = runSteps(s0, 50, { arc: goblinArc, pricing });
-  const run2 = runSteps(s0, 50, { arc: goblinArc, pricing });
+  const run1 = runSteps(s0, 50, { arc: goblinArc, pricing, growth });
+  const run2 = runSteps(s0, 50, { arc: goblinArc, pricing, growth });
 
   assert.deepEqual(run1.roots, run2.roots, "Two runs from same state must produce identical roots");
 
@@ -107,7 +111,7 @@ test("T03: determinism and purity", () => {
 
 test("world_advances_without_players: state differs after 100 steps", () => {
   const s0 = genesis(goblinArc, "city-adv", "seed-123");
-  const { state: s100 } = runSteps(s0, 100, { arc: goblinArc, pricing });
+  const { state: s100 } = runSteps(s0, 100, { arc: goblinArc, pricing, growth });
 
   assert.equal(s100.step, 100);
   assert.notEqual(s100.citizens.purse, s0.citizens.purse);
@@ -129,7 +133,7 @@ test("property-based: non-negativity and satisfaction bounds over seeds and arcs
       let curr = s0;
 
       for (let s = 1; s <= 50; s++) {
-        const { state: next } = step(curr, { arc, pricing });
+        const { state: next } = step(curr, { arc, pricing, growth });
 
         assert.ok(next.citizens.purse >= 0n, `Citizens purse must be >= 0 at step ${s}`);
         assert.ok(

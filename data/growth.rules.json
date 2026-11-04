@@ -1,0 +1,18 @@
+{
+  "version": 0,
+  "note": "Readable rules for closure, entry, population and stage growth. bps = basis points. Starting values, to be tuned.",
+  "idle_close_steps": 40,
+  "entry_price_premium_bps": 1000,
+  "entry_min_margin_bps": 2000,
+  "entry_purse_reserve": 3000,
+  "growth_min_satisfaction_bps": 8000,
+  "growth_bps": 150,
+  "shrink_max_satisfaction_bps": 3000,
+  "shrink_bps": 300,
+  "min_population": 10,
+  "stage_min_satisfaction_bps": 6000,
+  "dividend_bps": 1000,
+  "dividend_reserve_bps": 20000,
+  "topup_floor_bps": 5000,
+  "stock_cap_runs": 4
+}

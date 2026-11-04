@@ -7,10 +7,14 @@ import { join } from "node:path";
 import { parseArc } from "../packages/sim/src/arc.ts";
 import { genesis } from "../packages/sim/src/genesis.ts";
 import { parsePricingRules } from "../packages/sim/src/pricing.ts";
+import { parseGrowthRules } from "../packages/sim/src/growth.ts";
 import { runSteps } from "../packages/sim/src/run.ts";
 
 const pricingJson = readFileSync(join(process.cwd(), "data/pricing.rules.json"), "utf-8");
 const pricing = parsePricingRules(pricingJson);
+
+const growthJson = readFileSync(join(process.cwd(), "data/growth.rules.json"), "utf-8");
+const growth = parseGrowthRules(growthJson);
 
 const goblinArcJson = readFileSync(join(process.cwd(), "data/arcs/goblin_warrens.json"), "utf-8");
 const goblinArc = parseArc(JSON.parse(goblinArcJson));
@@ -19,7 +23,7 @@ const state0 = genesis(goblinArc, "city-perf", "seed-perf");
 
 console.log("Running 2000 steps on goblin_warrens...");
 const t0 = performance.now();
-const { state: finalState, roots } = runSteps(state0, 2000, { arc: goblinArc, pricing });
+const { state: finalState, roots } = runSteps(state0, 2000, { arc: goblinArc, pricing, growth });
 const t1 = performance.now();
 
 const durationMs = t1 - t0;

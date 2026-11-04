@@ -1,75 +1,42 @@
 /**
- * Economy report script running 400 steps on each arc.
- * Prints population, satisfaction_bps, purse, treasury, total business coin,
- * count of businesses with zero production, and price relative to base (bps).
+ * Economy report: runs every arc in data/arcs for 2000 steps (500 years) and prints a row every 200 steps.
+ * Usage: node scripts/economy_report.ts [arc_id ...]
  */
-
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parseArc } from "../packages/sim/src/arc.ts";
 import { genesis } from "../packages/sim/src/genesis.ts";
 import { parsePricingRules } from "../packages/sim/src/pricing.ts";
+import { parseGrowthRules } from "../packages/sim/src/growth.ts";
 import { step } from "../packages/sim/src/step.ts";
 
-const pricingJson = readFileSync(join(process.cwd(), "data/pricing.rules.json"), "utf-8");
-const pricing = parsePricingRules(pricingJson);
+const root = process.cwd();
+const read = (p: string): unknown => JSON.parse(readFileSync(join(root, p), "utf-8"));
+const pricing = parsePricingRules(readFileSync(join(root, "data/pricing.rules.json"), "utf-8"));
+const growth = parseGrowthRules(read("data/growth.rules.json"));
 
-const arcs = [
-  parseArc(JSON.parse(readFileSync(join(process.cwd(), "data/arcs/goblin_warrens.json"), "utf-8"))),
-  parseArc(JSON.parse(readFileSync(join(process.cwd(), "data/arcs/cave_hold.json"), "utf-8"))),
-];
+const wanted = process.argv.slice(2);
+const files = readdirSync(join(root, "data/arcs")).filter((f) => f.endsWith(".json")).sort();
+const arcs = files
+  .map((f) => parseArc(read(`data/arcs/${f}`)))
+  .filter((a) => wanted.length === 0 || wanted.includes(a.id));
 
+const STEPS = 2000;
+const EVERY = 200;
 for (const arc of arcs) {
-  console.log(`\n======================================================`);
-  console.log(`Arc: ${arc.name} (${arc.id})`);
-  console.log(`======================================================`);
-
+  console.log(`\n=== ${arc.name} (${arc.id}) ===`);
+  console.log("step | year | stage            | pop  | sat(bps) | open/closed | opened | total coin");
   let state = genesis(arc, `city-${arc.id}`, "seed-report");
-  const totalBusinesses = state.sectors.reduce((acc, s) => acc + s.businesses.length, 0);
-
-  // Print header
-  console.log(
-    `Step | Pop | Sat(bps) | Purse | Treas | BizCoin | 0-Prod | Item Prices vs Base (bps)`
-  );
-  console.log(`-----+-----+----------+-------+-------+---------+--------+-----------------------------------`);
-
-  let lastZeroProdCount = 0;
-
-  for (let s = 1; s <= 400; s++) {
-    const res = step(state, { arc, pricing });
+  let opened = 0;
+  for (let s = 1; s <= STEPS; s++) {
+    const res = step(state, { arc, pricing, growth });
     state = res.state;
-
-    if (s % 40 === 0) {
-      const producingBizIds = new Set(
-        res.events.filter((e) => e.event === "produced").map((e) => e.business_id as string)
-      );
-      lastZeroProdCount = totalBusinesses - producingBizIds.size;
-
-      let bizCoin = 0n;
-      for (const sec of state.sectors) {
-        for (const b of sec.businesses) {
-          bizCoin += b.coin;
-        }
-      }
-
-      const priceRels = arc.items
-        .map((it) => {
-          const p = state.market.price[it.id];
-          const relBps = (p * 10000n) / it.base_price;
-          return `${it.id}:${relBps}`;
-        })
-        .join(" ");
-
-      const stepStr = s.toString().padStart(4);
-      const popStr = state.citizens.population.toString().padStart(3);
-      const satStr = state.citizens.satisfaction_bps.toString().padStart(8);
-      const purseStr = state.citizens.purse.toString().padStart(5);
-      const treasStr = state.treasury.toString().padStart(5);
-      const bizCoinStr = bizCoin.toString().padStart(7);
-      const zeroProdStr = lastZeroProdCount.toString().padStart(6);
-
+    opened += res.events.filter((e) => e.event === "business_opened").length;
+    if (s % EVERY === 0) {
+      let open = 0, closed = 0, coin = state.citizens.purse + state.treasury;
+      for (const sec of state.sectors) for (const b of sec.businesses) { if (b.open) open++; else closed++; coin += b.coin; }
       console.log(
-        `${stepStr} | ${popStr} | ${satStr} | ${purseStr} | ${treasStr} | ${bizCoinStr} | ${zeroProdStr} | ${priceRels}`
+        `${String(s).padStart(4)} | ${String(Math.floor(s / 4)).padStart(4)} | ${arc.stages[state.stage].id.padEnd(16)} | ${String(state.citizens.population).padStart(4)} | ${String(state.citizens.satisfaction_bps).padStart(8)} | ${String(open).padStart(4)}/${String(closed).padEnd(6)} | ${String(opened).padStart(6)} | ${coin}`,
       );
     }
   }

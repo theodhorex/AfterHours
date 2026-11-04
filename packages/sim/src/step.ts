@@ -5,12 +5,22 @@
 
 import { cityRoot } from "./roots.ts";
 import { explainPrice } from "./pricing.ts";
+import {
+  processClosuresAndAuctions,
+  processDividends,
+  processWorkingCapital,
+  processEntrepreneurEntry,
+  processPopulation,
+  processStageUp,
+} from "./growth.ts";
 import type { ArcFile, ArcRecipe, Business, CityState, SectorState, SimEvent } from "./types.ts";
 import type { PricingRules } from "./pricing.ts";
+import type { GrowthRules } from "./growth.ts";
 
 export interface StepContext {
   arc: ArcFile;
   pricing: PricingRules;
+  growth: GrowthRules;
 }
 
 export interface StepResult {
@@ -46,10 +56,8 @@ export function flowsFromEvents(events: SimEvent[]): Record<string, ItemFlows> {
         flows[item].consumed_recipe += BigInt(qty);
       }
     } else if (e.event === "consumed_pop") {
-      const item = e.item as string;
-      const qty = BigInt((e.qty as string | bigint | number) ?? 0);
-      ensure(item);
-      flows[item].consumed_pop += qty;
+      ensure(e.item as string);
+      flows[e.item as string].consumed_pop += BigInt((e.qty as string | bigint | number) ?? 0);
     }
   }
   return flows;
@@ -79,27 +87,17 @@ function cloneState(state: CityState): CityState {
     world_seed: state.world_seed,
     stage: state.stage,
     sectors,
-    citizens: {
-      population: state.citizens.population,
-      satisfaction_bps: state.citizens.satisfaction_bps,
-      purse: state.citizens.purse,
-    },
-    market: {
-      price: { ...state.market.price },
-      demand_ema: { ...state.market.demand_ema },
-    },
+    citizens: { ...state.citizens },
+    market: { price: { ...state.market.price }, demand_ema: { ...state.market.demand_ema } },
     treasury: state.treasury,
-    totals: {
-      items: { ...state.totals.items },
-      coin: state.totals.coin,
-    },
+    totals: { items: { ...state.totals.items }, coin: state.totals.coin },
   };
 }
 
 /**
  * Executes a single simulation step. Pure function: does not mutate input state.
  */
-export function step(state: CityState, ctx: { arc: ArcFile; pricing: PricingRules }): StepResult {
+export function step(state: CityState, ctx: StepContext): StepResult {
   const nextState = cloneState(state);
   const nextStep = nextState.step;
   const events: SimEvent[] = [{ event: "step_start", city_id: nextState.city_id, step: nextStep }];
@@ -115,6 +113,7 @@ export function step(state: CityState, ctx: { arc: ArcFile; pricing: PricingRule
   }
 
   // 1. Production Phase
+  const productionRunsMap = new Map<string, bigint>();
   for (const b of allBusinesses) {
     if (!b.open) continue;
     const recipe = recipeMap.get(b.recipe);
@@ -131,6 +130,17 @@ export function step(state: CityState, ctx: { arc: ArcFile; pricing: PricingRule
       const maxPossibleWage = b.coin / recipe.wage;
       if (maxPossibleWage < runs) runs = maxPossibleWage;
     }
+    if (ctx.growth) {
+      // Stock cap: no point producing more of what already sits unsold in the warehouse.
+      for (const [item, perRun] of Object.entries(recipe.outputs)) {
+        const cap = BigInt(ctx.growth.stock_cap_runs) * recipe.max_per_run_per_business * perRun;
+        const room = cap - (b.inventory[item] ?? 0n);
+        const maxByRoom = room > 0n ? room / perRun : 0n;
+        if (maxByRoom < runs) runs = maxByRoom;
+      }
+    }
+
+    productionRunsMap.set(b.id, runs);
 
     if (runs > 0n) {
       const consumedRecipeMap: Record<string, string> = {};
@@ -153,18 +163,24 @@ export function step(state: CityState, ctx: { arc: ArcFile; pricing: PricingRule
       nextState.citizens.purse += totalWage;
 
       events.push({
-        event: "produced",
-        city_id: nextState.city_id,
-        step: nextStep,
-        business_id: b.id,
-        business: b.id,
-        recipe: b.recipe,
-        runs: runs.toString(),
-        consumed_recipe: consumedRecipeMap,
-        produced: producedMap,
-        wage_paid: totalWage.toString(),
+        event: "produced", city_id: nextState.city_id, step: nextStep,
+        business_id: b.id, business: b.id, recipe: b.recipe,
+        runs: runs.toString(), consumed_recipe: consumedRecipeMap,
+        produced: producedMap, wage_paid: totalWage.toString(),
       });
     }
+  }
+
+  // 2. Closure & Auction Phase (Rule 2)
+  if (ctx.growth) {
+    processClosuresAndAuctions(
+      nextState,
+      allBusinesses,
+      recipeMap,
+      productionRunsMap,
+      ctx.growth.idle_close_steps,
+      events
+    );
   }
 
   // 2. Business Purchases (Inputs)
@@ -210,15 +226,9 @@ export function step(state: CityState, ctx: { arc: ArcFile; pricing: PricingRule
           if (seller.inventory[item] === 0n) delete seller.inventory[item];
           remaining -= q;
           events.push({
-            event: "traded",
-            city_id: nextState.city_id,
-            step: nextStep,
-            buyer: buyer.id,
-            seller: seller.id,
-            item,
-            qty: q.toString(),
-            coin: cost.toString(),
-            price: price.toString(),
+            event: "traded", city_id: nextState.city_id, step: nextStep,
+            buyer: buyer.id, seller: seller.id, item,
+            qty: q.toString(), coin: cost.toString(), price: price.toString(),
           });
         }
       }
@@ -263,15 +273,9 @@ export function step(state: CityState, ctx: { arc: ArcFile; pricing: PricingRule
           fulfilled += q;
           consumedPopMap[candidateItem] = (consumedPopMap[candidateItem] ?? 0n) + q;
           events.push({
-            event: "traded",
-            city_id: nextState.city_id,
-            step: nextStep,
-            buyer: "citizens",
-            seller: seller.id,
-            item: candidateItem,
-            qty: q.toString(),
-            coin: cost.toString(),
-            price: price.toString(),
+            event: "traded", city_id: nextState.city_id, step: nextStep,
+            buyer: "citizens", seller: seller.id, item: candidateItem,
+            qty: q.toString(), coin: cost.toString(), price: price.toString(),
           });
         }
       }
@@ -337,19 +341,35 @@ export function step(state: CityState, ctx: { arc: ArcFile; pricing: PricingRule
 
     if (newPrice !== oldPrice) {
       events.push({
-        event: "price_update",
-        city_id: nextState.city_id,
-        step: nextStep,
-        item: itemId,
-        old_price: oldPrice.toString(),
-        new_price: newPrice.toString(),
-        price: newPrice.toString(),
-        reason,
+        event: "price_update", city_id: nextState.city_id, step: nextStep,
+        item: itemId, old_price: oldPrice.toString(), new_price: newPrice.toString(),
+        price: newPrice.toString(), reason,
       });
     }
   }
 
-  // 6. Totals Update
+  // 5b. Dividends: business profit flows back to citizens
+  if (ctx.growth) {
+    processDividends(nextState, ctx.arc, ctx.growth, events);
+    processWorkingCapital(nextState, ctx.arc, ctx.growth, events);
+  }
+
+  // 6. Entrepreneur Entry (Phase 6, Rule 3)
+  if (ctx.growth) {
+    processEntrepreneurEntry(nextState, ctx.arc, ctx.growth, events);
+  }
+
+  // 7. Population Growth / Shrink (Phase 7, Rule 4)
+  if (ctx.growth) {
+    processPopulation(nextState, ctx.growth, events);
+  }
+
+  // 8. Stage Advancement (Phase 8, Rule 5)
+  if (ctx.growth) {
+    processStageUp(nextState, ctx.arc, ctx.growth, events);
+  }
+
+  // 9. Totals Update
   const flows = flowsFromEvents(events);
   for (const itemDef of ctx.arc.items) {
     const netFlow =
