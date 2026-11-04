@@ -6,6 +6,8 @@
   "description": "AfterHours: a verifiable fantasy economy on NEAR",
   "engines": { "node": ">=24" },
   "scripts": {
-    "test": "node --test packages/sim/test/"
+    "test": "node --test packages/sim/test/ packages/verify/test/",
+    "verify": "node packages/verify/cli.ts",
+    "demo:mock": "node scripts/demo_mock.ts"
   }
 }
