@@ -13,6 +13,7 @@ import {
   processPopulation,
   processStageUp,
 } from "./growth.ts";
+import { processEventsPhase, applyRecipeOutputEffects } from "./events.ts";
 import type { ArcFile, ArcRecipe, Business, CityState, SectorState, SimEvent } from "./types.ts";
 import type { PricingRules } from "./pricing.ts";
 import type { GrowthRules } from "./growth.ts";
@@ -32,6 +33,9 @@ export interface ItemFlows {
   produced: bigint;
   consumed_recipe: bigint;
   consumed_pop: bigint;
+  sunk: bigint;
+  trade_to_players: bigint;
+  trade_from_players: bigint;
 }
 
 /**
@@ -40,7 +44,16 @@ export interface ItemFlows {
 export function flowsFromEvents(events: SimEvent[]): Record<string, ItemFlows> {
   const flows: Record<string, ItemFlows> = {};
   const ensure = (item: string) => {
-    if (!flows[item]) flows[item] = { produced: 0n, consumed_recipe: 0n, consumed_pop: 0n };
+    if (!flows[item]) {
+      flows[item] = {
+        produced: 0n,
+        consumed_recipe: 0n,
+        consumed_pop: 0n,
+        sunk: 0n,
+        trade_to_players: 0n,
+        trade_from_players: 0n,
+      };
+    }
   };
 
   for (const e of events) {
@@ -58,6 +71,20 @@ export function flowsFromEvents(events: SimEvent[]): Record<string, ItemFlows> {
     } else if (e.event === "consumed_pop") {
       ensure(e.item as string);
       flows[e.item as string].consumed_pop += BigInt((e.qty as string | bigint | number) ?? 0);
+    } else if (e.event === "inventory_sunk") {
+      const items = (e.items ?? e.sunk ?? {}) as Record<string, string | bigint | number>;
+      for (const [item, qty] of Object.entries(items)) {
+        ensure(item);
+        flows[item].sunk += BigInt(qty);
+      }
+    } else if (e.event === "order_accepted") {
+      if (e.kind === "buy" && typeof e.item === "string") {
+        ensure(e.item);
+        flows[e.item].trade_to_players += BigInt((e.filled as string | bigint | number) ?? 0);
+      } else if (e.kind === "sell" && typeof e.item === "string") {
+        ensure(e.item);
+        flows[e.item].trade_from_players += BigInt((e.filled as string | bigint | number) ?? 0);
+      }
     }
   }
   return flows;
@@ -104,6 +131,9 @@ export function step(state: CityState, ctx: StepContext): StepResult {
 
   const recipeMap = new Map<string, ArcRecipe>();
   for (const r of ctx.arc.recipes) recipeMap.set(r.id, r);
+
+  // 1. Events Phase
+  const activeEvents = processEventsPhase(nextState, ctx.arc, ctx.growth, events);
 
   // Flatten businesses in fixed order: sector idx asc, business id asc
   const allBusinesses: Business[] = [];
@@ -153,7 +183,8 @@ export function step(state: CityState, ctx: StepContext): StepResult {
 
       const producedMap: Record<string, string> = {};
       for (const [item, outputPerRun] of Object.entries(recipe.outputs)) {
-        const qty = runs * outputPerRun;
+        const baseQty = runs * outputPerRun;
+        const qty = applyRecipeOutputEffects(recipe.id, baseQty, activeEvents);
         b.inventory[item] = (b.inventory[item] ?? 0n) + qty;
         producedMap[item] = qty.toString();
       }
@@ -373,9 +404,12 @@ export function step(state: CityState, ctx: StepContext): StepResult {
   const flows = flowsFromEvents(events);
   for (const itemDef of ctx.arc.items) {
     const netFlow =
-      (flows[itemDef.id]?.produced ?? 0n) -
+      (flows[itemDef.id]?.produced ?? 0n) +
+      (flows[itemDef.id]?.trade_from_players ?? 0n) -
       (flows[itemDef.id]?.consumed_recipe ?? 0n) -
-      (flows[itemDef.id]?.consumed_pop ?? 0n);
+      (flows[itemDef.id]?.consumed_pop ?? 0n) -
+      (flows[itemDef.id]?.sunk ?? 0n) -
+      (flows[itemDef.id]?.trade_to_players ?? 0n);
     nextState.totals.items[itemDef.id] = (state.totals.items[itemDef.id] ?? 0n) + netFlow;
   }
 

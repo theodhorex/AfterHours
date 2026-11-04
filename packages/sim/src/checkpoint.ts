@@ -85,7 +85,7 @@ export function buildCheckpoint(params: BuildCheckpointParams): Checkpoint {
       consumed_recipe: (f?.consumed_recipe ?? 0n).toString(),
       consumed_pop: (f?.consumed_pop ?? 0n).toString(),
       sourced: "0",
-      sunk: "0",
+      sunk: (f?.sunk ?? 0n).toString(),
       trade_to_players: "0",
       trade_from_players: "0",
     };

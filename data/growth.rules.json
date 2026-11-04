@@ -14,5 +14,6 @@
   "dividend_bps": 5000,
   "dividend_reserve_bps": 10000,
   "topup_floor_bps": 5000,
-  "stock_cap_runs": 4
+  "stock_cap_runs": 4,
+  "event_start_bps": 1500
 }

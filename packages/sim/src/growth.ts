@@ -26,6 +26,8 @@ export interface GrowthRules {
   topup_floor_bps: bigint;
   /** A business stops producing when its stock of an output reaches this many full runs of that output. */
   stock_cap_runs: number;
+  /** Probability (in basis points, 10000 = 100%) that an arc event starts in a step. Default 1500. */
+  event_start_bps: bigint;
 }
 
 function parseNumberField(obj: Record<string, unknown>, field: string, min?: number, max?: number): number {
@@ -90,6 +92,10 @@ export function parseGrowthRules(json: unknown): GrowthRules {
   const dividend_reserve_bps = parseBigIntField(obj, "dividend_reserve_bps", 0n);
   const topup_floor_bps = parseBigIntField(obj, "topup_floor_bps", 0n);
   const stock_cap_runs = parseNumberField(obj, "stock_cap_runs", 1);
+  const event_start_bps =
+    obj.event_start_bps !== undefined
+      ? parseBigIntField(obj, "event_start_bps", 0n, 10000n)
+      : 1500n;
 
   return {
     version,
@@ -108,6 +114,7 @@ export function parseGrowthRules(json: unknown): GrowthRules {
     dividend_reserve_bps,
     topup_floor_bps,
     stock_cap_runs,
+    event_start_bps,
   };
 }
 

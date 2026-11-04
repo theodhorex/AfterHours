@@ -1,4 +1,5 @@
 import { leaf } from "./hash.ts";
+import { createHash } from "node:crypto";
 
 const MULT = 6364136223846793005n;
 const MASK64 = 0xffffffffffffffffn;

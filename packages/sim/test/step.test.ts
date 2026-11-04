@@ -45,7 +45,8 @@ test("T01: item conservation over 200 steps for BOTH real arcs", () => {
       const netFlow =
         (flows[item.id]?.produced ?? 0n) -
         (flows[item.id]?.consumed_recipe ?? 0n) -
-        (flows[item.id]?.consumed_pop ?? 0n);
+        (flows[item.id]?.consumed_pop ?? 0n) -
+        (flows[item.id]?.sunk ?? 0n);
 
       assert.equal(
         sFinal.totals.items[item.id],
