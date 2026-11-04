@@ -1,12 +1,24 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Header } from "../components/Header.tsx";
-import { AtlasMap } from "../components/AtlasMap.tsx";
 import { DistrictDetail } from "../components/DistrictDetail.tsx";
 import { MarketPanel } from "../components/MarketPanel.tsx";
 import { ChronicleList } from "../components/ChronicleList.tsx";
 import { SimulationControls } from "../components/SimulationControls.tsx";
+
+const IsoCity = dynamic(
+  () => import("../components/IsoCity.tsx").then((mod) => mod.IsoCity),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="atlas-panel rounded-sm p-12 text-center text-atlas-ink-muted font-mono text-sm border border-atlas-line">
+        Surveying terrain & rendering isometric city view...
+      </div>
+    ),
+  }
+);
 import {
   createWorld,
   advanceWorld,
@@ -195,13 +207,13 @@ export default function CityViewPage() {
         {/* Primary Content Grid */}
         {cityView && !activeError && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left / Primary Column: Atlas Map & District Detail */}
+            {/* Left / Primary Column: Isometric City View & District Detail */}
             <div className="lg:col-span-7 space-y-6">
-              <AtlasMap
-                sectors={cityView.sectors}
+              <IsoCity
+                city={cityView}
                 selectedIdx={selectedIdx}
                 onSelectSector={setSelectedIdx}
-                cityName={cityView.name}
+                seed={seed}
               />
 
               {selectedSector && <DistrictDetail sector={selectedSector} />}

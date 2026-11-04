@@ -4,42 +4,32 @@
  */
 
 import { stepToSeason } from "./format.ts";
-import { explainPrice, explainText } from "../../../../packages/sim/src/pricing.ts";
-import type {
-  ArcFile,
-  CityState,
-  SimEvent,
-} from "../../../../packages/sim/src/types.ts";
-import type { PricingRules } from "../../../../packages/sim/src/pricing.ts";
+import { explainPrice, explainText, type PricingRules } from "../../../../packages/sim/src/pricing.ts";
+import type { ArcFile, CityState, SimEvent } from "../../../../packages/sim/src/types.ts";
 import type { PriceExplanation } from "./explain.ts";
-import type {
-  Business,
-  Sector,
-  Citizens,
-  MarketItem,
-  ChronicleEvent,
-  MockCity,
-} from "../data/mock-city.ts";
+import type { Business, Sector, Citizens, MarketItem, ChronicleEvent, MockCity } from "../data/mock-city.ts";
 
 export type CityView = MockCity & {
   stateRoot: string;
 };
 
+/**
+ * Converts identifier with underscores or hyphens into readable Title Case.
+ * Example: 'crystal_mine' -> 'Crystal Mine'
+ */
+export function toTitleCase(id: string): string {
+  return id
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
+
 const ITEM_NAMES: Record<string, string> = {
-  grain: "Cave Grain",
-  flour: "Stone Flour",
-  bread: "Cinder Bread",
-  fish: "Blind Fish",
-  ore: "Crude Ore",
-  ingot: "Scrap Ingot",
-  tool: "Warren Pick",
-  crystal: "Glimmer Shard",
-  elixir: "Bile Tonic",
-  scroll: "Shadow Script",
-  scrap: "Rusted Bits",
-  gadget: "Clockwork Gizmo",
-  hide: "Beast Hide",
-  totem: "Runic Totem",
+  grain: "Cave Grain", flour: "Stone Flour", bread: "Cinder Bread",
+  fish: "Blind Fish", ore: "Crude Ore", ingot: "Scrap Ingot",
+  tool: "Warren Pick", crystal: "Glimmer Shard", elixir: "Bile Tonic",
+  scroll: "Shadow Script", scrap: "Rusted Bits", gadget: "Clockwork Gizmo",
+  hide: "Beast Hide", totem: "Runic Totem",
 };
 
 const SECTOR_DESCRIPTIONS: Record<string, string> = {
@@ -231,11 +221,16 @@ export function stateToCityView(
   const sectors: Sector[] = state.sectors.map((sec, idx) => {
     const arcSector = arc.sectors.find((s) => s.idx === idx) ?? arc.sectors[idx];
     const kind = (arcSector?.kind ?? sec.kind) as Sector["kind"];
-    const name = arcSector?.name ?? `Sector ${idx}`;
-    const description = SECTOR_DESCRIPTIONS[kind] ?? `District ${name}.`;
+    const name = arcSector?.name ?? toTitleCase(kind);
+    const description =
+      arc.id === "goblin_warrens" && SECTOR_DESCRIPTIONS[kind]
+        ? SECTOR_DESCRIPTIONS[kind]
+        : `${name} district specializing in ${kind} production and trade.`;
 
     const businesses: Business[] = sec.businesses.map((b) => {
-      const recipeLabel = RECIPE_NAMES[b.recipe] ?? b.recipe;
+      const recipeLabel =
+        (arc.id === "goblin_warrens" ? RECIPE_NAMES[b.recipe] : undefined) ??
+        toTitleCase(b.recipe);
       const num = b.id.includes("-") ? b.id.split("-")[1] : b.id;
       const bizName = `${recipeLabel} #${num}`;
 
@@ -297,7 +292,9 @@ export function stateToCityView(
       clamp: reason.clamped === "floor" ? "floor" : reason.clamped === "cap" ? "cap" : "none",
     };
 
-    const friendlyName = ITEM_NAMES[itemId] ?? (itemId.charAt(0).toUpperCase() + itemId.slice(1));
+    const friendlyName =
+      (arc.id === "goblin_warrens" ? ITEM_NAMES[itemId] : undefined) ??
+      toTitleCase(itemId);
     const tier = (itemDef.tier as MarketItem["tier"]) ?? "staple";
 
     return {

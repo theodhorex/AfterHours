@@ -22,6 +22,8 @@ import type { GrowthRules } from "../../../../packages/sim/src/growth.ts";
 
 import goblinWarrensJson from "../../../../data/arcs/goblin_warrens.json" with { type: "json" };
 import caveHoldJson from "../../../../data/arcs/cave_hold.json" with { type: "json" };
+import dinoValeJson from "../../../../data/arcs/dino_vale.json" with { type: "json" };
+import elfGroveJson from "../../../../data/arcs/elf_grove.json" with { type: "json" };
 import pricingRulesJson from "../../../../data/pricing.rules.json" with { type: "json" };
 import growthRulesJson from "../../../../data/growth.rules.json" with { type: "json" };
 
@@ -49,6 +51,8 @@ const PARSED_GROWTH: GrowthRules = parseGrowthRules(growthRulesJson);
 const PARSED_ARCS: Record<string, ArcFile> = {
   goblin_warrens: parseArc(goblinWarrensJson),
   cave_hold: parseArc(caveHoldJson),
+  dino_vale: parseArc(dinoValeJson),
+  elf_grove: parseArc(elfGroveJson),
 };
 
 export const AVAILABLE_ARCS = Object.keys(PARSED_ARCS) as [string, ...string[]];

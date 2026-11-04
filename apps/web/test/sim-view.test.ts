@@ -10,6 +10,7 @@ import {
   stateToCityView,
   eventsToChronicle,
   calculateItemTrend,
+  toTitleCase,
 } from "../src/lib/sim-view.ts";
 import { explainPrice, explainText } from "../../../packages/sim/src/pricing.ts";
 import type { SimEvent } from "../../../packages/sim/src/types.ts";
@@ -136,5 +137,18 @@ describe("sim-view and sim-adapter", () => {
     });
 
     assert.deepEqual(viewA, viewB);
+  });
+
+  it("dynamic sector naming and title case fallback for elf_grove", () => {
+    const world = createWorld("elf_grove", "seed-elf-test");
+    const view = stateToCityView(world.state, world.arc, world.pricing);
+
+    // Sector 0 name equals the arc's 'Sylvan Canopy'
+    assert.equal(view.sectors[0].name, "Sylvan Canopy");
+    assert.equal(view.sectors[0].kind, "food");
+
+    // Title case fallback
+    assert.equal(toTitleCase("crystal_mine"), "Crystal Mine");
+    assert.equal(toTitleCase("hearth_baker"), "Hearth Baker");
   });
 });

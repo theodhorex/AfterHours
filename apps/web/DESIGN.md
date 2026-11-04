@@ -63,3 +63,20 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
 - ❌ Do NOT hardcode arbitrary magic numbers in component styling.
 - ❌ Do NOT cause horizontal layout overflow on narrow mobile viewports (<360px).
 - ❌ Do NOT convey status solely through color—always accompany status with icons, tabular arrows, or explicit text tags.
+
+---
+
+## 7. Isometric City View (Procedural Living World)
+- **Visual Style**: Top-down angled 2:1 isometric grid (64x32px tiles), inspired by procedural simulation aesthetics without copying any proprietary game art.
+- **Arc Palette Themes**:
+  - `goblin_warrens`: Damp cavern stone (`#2b241d`), dark timber (`#1f1b16`), and ember beacon lights (`#f07f4f`).
+  - `cave_hold`: Earthy mud huts (`#30251c`), dark stone (`#231a13`), and bone/hearth amber highlights (`#e5b358`).
+  - `dino_vale`: Primordial swamp green (`#3b5229`), amber fossil highlights (`#d48a37`), and river wetlands.
+  - `elf_grove`: Pale ancient wood (`#50493f`), silver leaf highlights (`#8ec3b0`), and starlight blues (`#23576e`).
+- **Accessibility & Keyboard Parity**:
+  - Main canvas viewport carries `role="img"` and descriptive `aria-label` summarizing settlement name, year, population, open establishments, and insolvent shops.
+  - Dedicated interactive district selection list below canvas offers full keyboard navigation parity with focus rings.
+  - Screen controls provide explicit, accessible zoom-in, zoom-out, and recenter `<button>` elements.
+- **Motion & Resource Discipline**:
+  - Strictly respects `prefers-reduced-motion`: When active, ticker loops and particle emissions (chimney smoke, water shimmer) are completely stopped.
+  - Pre-renders procedural sprites into reusable textures (`generateTexture`) to avoid per-frame redraw bottlenecks.
