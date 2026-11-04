@@ -41,7 +41,7 @@ export default function CityViewPage() {
   const [seed, setSeed] = useState<string>(DEFAULT_SEED);
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(true);
-  const [stepsRemaining, setStepsRemaining] = useState<number>(2000);
+  const [stepsRemaining, setStepsRemaining] = useState<number>(10000);
   const [error, setError] = useState<Error | null>(null);
 
   // Initialize world instance at genesis (step 0)
@@ -102,7 +102,7 @@ export default function CityViewPage() {
   // Reset simulation to step 0
   const handleReset = useCallback(() => {
     setIsRunning(true);
-    setStepsRemaining(2000);
+    setStepsRemaining(10000);
     setError(null);
     try {
       setWorld(createWorld(arcId, seed));

@@ -3,17 +3,25 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Application } from "pixi.js";
 import type { CityView } from "../lib/sim-view.ts";
+import { stateToCityView } from "../lib/sim-view.ts";
+import { getArc, getPricingRules } from "../lib/sim-adapter.ts";
 import { generateTerrain } from "../lib/iso/terrain.ts";
-import { layoutCity, type CityLayout } from "../lib/iso/layout.ts";
+import { layoutCity, getStageIndex, type CityLayout } from "../lib/iso/layout.ts";
 import { IsoCityScene } from "../lib/iso/render.ts";
 import { calculateFitCamera } from "../lib/iso/iso-math.ts";
 import { bubblesFor } from "../lib/iso/bubbles.ts";
+import {
+  computeGrowthView,
+  createReplaySnapshotStore,
+} from "../lib/iso/growth-view.ts";
+import { CityGrowthScrubber } from "./CityGrowthScrubber.tsx";
 
 export interface IsoCityProps {
   city: CityView;
   selectedIdx: number;
   onSelectSector: (idx: number) => void;
   seed?: string;
+  onScrubStep?: (step: number) => void;
 }
 
 const MIN_ZOOM = 0.5;
@@ -33,11 +41,35 @@ export function IsoCity({
   selectedIdx,
   onSelectSector,
   seed = "goblin_seed_0",
+  onScrubStep,
 }: IsoCityProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const sceneRef = useRef<IsoCityScene | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const [scrubStep, setScrubStep] = useState<number | null>(null);
+
+  const snapshotStore = useMemo(() => {
+    return createReplaySnapshotStore(city.arc_id, seed);
+  }, [city.arc_id, seed]);
+
+  // Derived state at current scrub step or live simulation step
+  const activeStep = scrubStep ?? city.step;
+
+  const activeCity = useMemo(() => {
+    if (scrubStep === null || scrubStep === city.step) {
+      return city;
+    }
+    try {
+      const { state, stateRoot } = snapshotStore.getStateAtStep(scrubStep);
+      return stateToCityView(state, getArc(city.arc_id), getPricingRules(), {
+        stateRoot,
+      });
+    } catch {
+      return city;
+    }
+  }, [scrubStep, city, snapshotStore]);
 
   // Camera lives in a ref: panning/zooming never triggers React renders or scene rebuilds.
   const camRef = useRef({ x: 0, y: 0, zoom: 1 });
@@ -58,21 +90,44 @@ export function IsoCity({
   const { totalOpen, totalClosed } = useMemo(() => {
     let open = 0;
     let closed = 0;
-    for (const s of city.sectors) {
+    for (const s of activeCity.sectors) {
       for (const b of s.businesses) {
         if (b.open && b.insolvent_steps === 0) open++;
         else closed++;
       }
     }
     return { totalOpen: open, totalClosed: closed };
-  }, [city.sectors]);
+  }, [activeCity.sectors]);
 
-  const terrain = useMemo(() => generateTerrain(seed, city.arc_id, 40), [seed, city.arc_id]);
-  const layout: CityLayout = useMemo(() => layoutCity(terrain, city), [terrain, city]);
+  const terrain = useMemo(() => generateTerrain(seed, activeCity.arc_id, 40), [seed, activeCity.arc_id]);
+  const layout: CityLayout = useMemo(() => layoutCity(terrain, activeCity), [terrain, activeCity]);
   const layoutRef = useRef(layout);
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
+
+  const growthView = useMemo(() => {
+    return computeGrowthView({
+      arcId: activeCity.arc_id,
+      stageId: activeCity.stage_id,
+      stageIndex: getStageIndex(activeCity.stage_id),
+      year: activeCity.year,
+      step: activeCity.step,
+      population: activeCity.citizens.population,
+      businesses: activeCity.sectors.flatMap((s) =>
+        s.businesses.map((b) => ({
+          id: b.id,
+          sectorIdx: s.idx,
+          open: b.open,
+          insolvent: b.insolvent_steps > 0,
+        }))
+      ),
+      roads: layout.roads,
+      buildings: layout.buildings,
+      houses: layout.houses,
+      plaza: layout.plaza,
+    });
+  }, [activeCity, layout]);
 
   const builtPoints = useMemo(() => {
     return [
@@ -186,11 +241,20 @@ export function IsoCity({
 
   // Rebuild scene when the world changes (new business, closure, stage, population) — app is kept.
   const firstBuildRef = useRef(true);
-  const season = typeof city.step === "number" ? ((city.step % 4) + 4) % 4 : 0;
-  const bubbles = useMemo(() => bubblesFor(city), [city]);
+  const season = typeof activeCity.step === "number" ? ((activeCity.step % 4) + 4) % 4 : 0;
+  const bubbles = useMemo(() => bubblesFor(activeCity), [activeCity]);
   useEffect(() => {
     if (!ready || !sceneRef.current) return;
-    sceneRef.current.buildScene(terrain, layout, city.arc_id, selectedRef.current, !prefersReducedMotion(), season, bubbles);
+    sceneRef.current.buildScene(
+      terrain,
+      layout,
+      activeCity.arc_id,
+      selectedRef.current,
+      !prefersReducedMotion(),
+      season,
+      bubbles,
+      growthView
+    );
     if (firstBuildRef.current) {
       firstBuildRef.current = false;
       recenter();
@@ -198,14 +262,14 @@ export function IsoCity({
       const { x, y, zoom } = camRef.current;
       sceneRef.current.setCamera(x, y, zoom);
     }
-  }, [ready, terrain, layout, city.arc_id, season, bubbles, recenter]);
+  }, [ready, terrain, layout, activeCity.arc_id, season, bubbles, growthView, recenter]);
 
   // Selection only redraws the highlight ring and label
   useEffect(() => {
     if (ready) sceneRef.current?.updateSelection(selectedIdx);
   }, [ready, selectedIdx]);
 
-  const a11ySummary = `${city.name} isometric view, Year ${city.year}, Season ${city.season}. Population ${city.citizens.population}. Stage: ${city.stage_name}. ${totalOpen} active businesses, ${totalClosed} closed or insolvent. Drag to pan or use zoom buttons.`;
+  const a11ySummary = `${activeCity.name} isometric view, Year ${activeCity.year}, Season ${activeCity.season}. Population ${activeCity.citizens.population}. Stage: ${activeCity.stage_name}. ${totalOpen} active businesses, ${totalClosed} closed or insolvent. Era: ${growthView.patinaName}. Drag to pan or use zoom buttons.`;
 
   useEffect(() => {
     canvasRef.current?.setAttribute("role", "img");
@@ -317,6 +381,24 @@ export function IsoCity({
         </div>
       </div>
 
+      {/* 2500-Year Growth Timeline Scrubber & Age Stats Strip */}
+      <CityGrowthScrubber
+        currentStep={activeStep}
+        maxStep={10000}
+        cityName={activeCity.name}
+        arcId={activeCity.arc_id}
+        stageName={activeCity.stage_name}
+        population={activeCity.citizens.population}
+        openBiz={totalOpen}
+        totalBiz={totalOpen + totalClosed}
+        satisfaction={Math.round(activeCity.citizens.satisfaction_bps / 100)}
+        patinaName={growthView.patinaName}
+        onScrub={(target) => {
+          setScrubStep(target);
+          onScrubStep?.(target);
+        }}
+      />
+
       {/* Pixi Canvas Viewport */}
       <div
         ref={containerRef}
@@ -348,7 +430,7 @@ export function IsoCity({
           Municipal Districts (Keyboard Operable)
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {city.sectors.map((sector) => {
+          {activeCity.sectors.map((sector) => {
             const isSelected = sector.idx === selectedIdx;
             const openBiz = sector.businesses.filter((b) => b.open && b.insolvent_steps === 0).length;
             const closedBiz = sector.businesses.length - openBiz;

@@ -251,6 +251,24 @@ export function drawSectorBuildingGraphics(
     }
   }
 
+  // Tier roof architecture and crowning crests (tier 0..3 -> level 1..4)
+  if (!ruined && level >= 2) {
+    // Tier 1+: Decorative ridge trim
+    g.poly([-10, -wallH - 6, 10, -wallH - 6]).stroke({ color: roofOutline, width: 1.5 });
+  }
+  if (!ruined && level >= 3) {
+    // Tier 2+: Grand dormer pediment and lit attic rose window
+    g.poly([-5, -wallH - 10, 5, -wallH - 10, 0, -wallH - 16])
+      .fill({ color: roofCol })
+      .stroke({ color: roofOutline, width: 1 });
+    g.circle(0, -wallH - 11, 2).fill({ color: warmGlow });
+  }
+  if (!ruined && level >= 4) {
+    // Tier 3: Monumental gilded roof finial & weather vane
+    g.poly([0, -wallH - 22, 0, -wallH - 32]).stroke({ color: 0xffe066, width: 2 });
+    g.circle(0, -wallH - 33, 2.5).fill({ color: 0xffd54f }).stroke({ color: 0x8a6f1c, width: 1 });
+  }
+
   // Ruined details
   if (ruined) {
     g.poly([-9, -wallH - 11, 9, -wallH - 3, 0, -wallH + 9]).fill({ color: 0x0a0806 });

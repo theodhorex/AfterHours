@@ -7,6 +7,7 @@
 import {
   Container,
   Sprite,
+  Graphics,
   type Application,
 } from "pixi.js";
 import { isoToScreen, depthSortKey, isClick, getTileVariant } from "./iso-math.ts";
@@ -18,6 +19,9 @@ import { drawDistrictHighlights, makeBuildingBadge, BubblePoolManager } from "./
 import type { Bubble } from "./bubbles.ts";
 import type { TerrainMap } from "./terrain.ts";
 import type { CityLayout, BuildingLayout } from "./layout.ts";
+import { computeGrowthView, type GrowthViewResult } from "./growth-view.ts";
+import { getCenturyMonumentSpec } from "./growth-render-pure.ts";
+import { drawCenturyMonument } from "./monument.ts";
 
 export interface IsoSceneCallbacks {
   onSelectSector?: (sectorIdx: number) => void;
@@ -165,6 +169,7 @@ export class IsoCityScene {
   private animManager: IsoAnimationManager;
   private currentTerrain: TerrainMap | null = null;
   private currentLayout: CityLayout | null = null;
+  private currentGrowthView: GrowthViewResult | null = null;
   private currentArcId = "";
   private currentSeason = 0;
   private currentTheme: ThemeTokens | null = null;
@@ -175,6 +180,8 @@ export class IsoCityScene {
   private tickerRunning = false;
   private hoverBadge: Container | null = null;
   private selBadge: Container | null = null;
+  private knownBuildingIds = new Set<string>();
+  private popInTargets: Container[] = [];
 
   constructor(app: Application, callbacks: IsoSceneCallbacks = {}) {
     this.app = app;
@@ -211,13 +218,15 @@ export class IsoCityScene {
     selectedIdx: number,
     allowMotion: boolean,
     season = 0,
-    bubbles: Bubble[] = []
+    bubbles: Bubble[] = [],
+    growthView?: GrowthViewResult
   ): void {
-    // If only season changed on the exact same layout and arc, swap tints and weather smoothly
+    // If only season changed on the exact same layout and arc and growthView, swap tints and weather smoothly
     if (
       this.currentTerrain === terrain &&
       this.currentLayout === layout &&
       this.currentArcId === arcId &&
+      this.currentGrowthView === growthView &&
       this.currentSeason !== season
     ) {
       this.setSeason(season, allowMotion, bubbles);
@@ -227,6 +236,7 @@ export class IsoCityScene {
 
     this.currentTerrain = terrain;
     this.currentLayout = layout;
+    this.currentGrowthView = growthView ?? null;
     this.currentArcId = arcId;
     this.currentSeason = season;
     this.selectedIdx = selectedIdx;
@@ -243,6 +253,17 @@ export class IsoCityScene {
     const smokeOrigins: Array<{ x: number; y: number }> = [];
     const glowOrigins: Array<{ x: number; y: number }> = [];
     const bobSprites: Sprite[] = [];
+
+    const gv = growthView ?? computeGrowthView({
+      arcId,
+      year: 0,
+      population: layout.houses.length * 6,
+      businesses: layout.buildings.map((b) => ({ id: b.id, sectorIdx: b.sectorIdx, open: b.open, insolvent: b.ruined })),
+      roads: layout.roads,
+      buildings: layout.buildings,
+      houses: layout.houses,
+      plaza: layout.plaza,
+    });
 
     // 1. Ground tiles with nearest-neighbour scaling and roundPixels
     for (let y = 0; y < terrain.size; y++) {
@@ -264,11 +285,12 @@ export class IsoCityScene {
       }
     }
 
-    // 2. Road tiles with edge lines & connection masks
+    // 2. Road tiles with edge lines & connection masks (growing from center outward)
+    const roadsToDraw = gv.builtRoads;
     const roadSet = new Set<string>();
-    for (const r of layout.roads) roadSet.add(`${r.x},${r.y}`);
+    for (const r of roadsToDraw) roadSet.add(`${r.x},${r.y}`);
 
-    for (const r of layout.roads) {
+    for (const r of roadsToDraw) {
       let mask = 0;
       if (roadSet.has(`${r.x},${r.y - 1}`)) mask |= 1;
       if (roadSet.has(`${r.x + 1},${r.y}`)) mask |= 2;
@@ -339,19 +361,29 @@ export class IsoCityScene {
 
     // Sector Landmark Buildings
     for (const b of layout.buildings) {
+      const slot = gv.buildingSlots.find((s) => s.id === b.id);
+      const bLevel = slot ? slot.level : b.level;
+      const bOpen = slot ? slot.open : b.open;
+      const bRuined = slot ? slot.ruined : b.ruined;
       const sec = layout.sectors.find((s) => s.idx === b.sectorIdx);
       const sectorKind = sec?.kind ?? "food";
-      const tex = tm.getBuildingTexture(sectorKind, b.level, b.ruined, arcId, season);
+      const tex = tm.getBuildingTexture(sectorKind, bLevel, bRuined, arcId, season);
       const spr = new Sprite(tex);
       spr.roundPixels = true;
       const scr = isoToScreen(b.tileX, b.tileY);
       spr.position.set(scr.x, scr.y);
       spr.anchor.set(0.5, 0.85);
 
-      if (sectorKind === "harbor" && !b.ruined) bobSprites.push(spr);
+      if (sectorKind === "harbor" && !bRuined) bobSprites.push(spr);
 
       const bContainer = new Container();
       bContainer.addChild(spr);
+
+      if (this.allowMotion && !this.knownBuildingIds.has(b.id)) {
+        bContainer.scale.set(0.1, 0.1);
+        this.popInTargets.push(bContainer);
+      }
+
       bContainer.eventMode = "static";
       bContainer.cursor = "pointer";
 
@@ -382,13 +414,27 @@ export class IsoCityScene {
         depth: depthSortKey(b.tileX, b.tileY, 2),
       });
 
-      if (b.open && !b.ruined) {
+      if (bOpen && !bRuined) {
         if (sectorKind === "forge" || sectorKind === "ore") {
           smokeOrigins.push({ x: scr.x + 10, y: scr.y - 38 });
         } else if (sectorKind === "alchemy") {
           smokeOrigins.push({ x: scr.x, y: scr.y - 42 });
         }
       }
+    }
+
+    // Plaza Century Aging Monument (well -> cistern -> statue -> obelisk -> relic monolith)
+    if (layout.plaza) {
+      const monG = new Graphics();
+      const monSpec = getCenturyMonumentSpec(gv.century, arcId);
+      drawCenturyMonument(monG, monSpec);
+      const pScr = isoToScreen(layout.plaza.x, layout.plaza.y);
+      monG.position.set(pScr.x, pScr.y);
+
+      entityDisplayList.push({
+        container: monG,
+        depth: depthSortKey(layout.plaza.x, layout.plaza.y, 1),
+      });
     }
 
     // Sort entities front-to-back
@@ -402,12 +448,15 @@ export class IsoCityScene {
 
     // 6. Setup Life Animation (smoke, glows, trees, traffic)
     if (this.allowMotion) {
-      const openCount = layout.buildings.filter((b) => b.open && !b.ruined).length;
+      const openCount = layout.buildings.filter((b) => {
+        const slot = gv.buildingSlots.find((s) => s.id === b.id);
+        return slot ? slot.open && !slot.ruined : b.open && !b.ruined;
+      }).length;
       const actors = generateActors(
-        layout.roads,
+        roadsToDraw,
         layout.plaza,
         layout.buildings,
-        layout.houses.length * 6,
+        gv.citizenCount * 6,
         openCount
       );
       this.animManager.setup(
@@ -430,6 +479,9 @@ export class IsoCityScene {
 
     // 7b. Update pooled speech bubbles
     this.bubbleManager.update(bubbles, layout);
+
+    // 7c. Record known buildings for future pop-ins
+    this.knownBuildingIds = new Set(layout.buildings.map((b) => b.id));
 
     // 8. Manage ticker
     if (this.allowMotion && !this.tickerRunning) {
@@ -486,6 +538,18 @@ export class IsoCityScene {
 
   private onTick = (): void => {
     if (this.allowMotion) {
+      if (this.popInTargets.length > 0) {
+        for (let i = this.popInTargets.length - 1; i >= 0; i--) {
+          const c = this.popInTargets[i];
+          const next = c.scale.x + (1.0 - c.scale.x) * 0.25;
+          if (next >= 0.98) {
+            c.scale.set(1.0, 1.0);
+            this.popInTargets.splice(i, 1);
+          } else {
+            c.scale.set(next, next);
+          }
+        }
+      }
       this.animManager.update();
       this.weatherManager.update();
       this.bubbleManager.tick(this.allowMotion);
@@ -493,6 +557,7 @@ export class IsoCityScene {
   };
 
   private clearScene(): void {
+    this.popInTargets = [];
     this.groundLayer.removeChildren();
     this.roadLayer.removeChildren();
     this.zoneLayer.removeChildren();
