@@ -15,12 +15,15 @@ import { cityRoot, nextStateRoot, eventRoot, genesisPrevRoot, sectorRoot } from 
 import { buildCheckpoint } from "../../sim/src/checkpoint.ts";
 import type { Checkpoint } from "../../sim/src/checkpoint.ts";
 import type { SimEvent } from "../../sim/src/types.ts";
+import type { PlayerOrder } from "../../sim/src/orders.ts";
 
 export interface VerifyOptions {
   arcId: string;
   seed: string;
   cityId: string;
   checkpoints: Checkpoint[];
+  /** Player orders per step (the replay needs the same orders the operator executed). */
+  orders?: Record<number, PlayerOrder[]>;
   dataDir?: string;
 }
 
@@ -72,11 +75,51 @@ export function computeRulesHash(arcId?: string, dataDir?: string): RulesHashRes
   };
 }
 
+function toBig(v: unknown, field: string): bigint | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v === "bigint") return v;
+  if (typeof v === "string" && /^-?[0-9]+$/.test(v)) return BigInt(v);
+  if (typeof v === "number" && Number.isInteger(v)) return BigInt(v);
+  throw new TypeError(`orders file: field '${field}' must be an integer or decimal string`);
+}
+
+/**
+ * Parses an orders file: an array of `{ step, orders: [...] }`, with amounts as decimal strings.
+ */
+export function parseOrdersFile(json: unknown): Record<number, PlayerOrder[]> {
+  if (!Array.isArray(json)) throw new TypeError("orders file must be an array of { step, orders }");
+  const out: Record<number, PlayerOrder[]> = {};
+  for (const entry of json) {
+    if (typeof entry !== "object" || entry === null) throw new TypeError("orders file: each entry must be an object");
+    const e = entry as Record<string, unknown>;
+    if (typeof e.step !== "number" || !Number.isInteger(e.step) || e.step < 1) throw new TypeError("orders file: 'step' must be a positive integer");
+    if (!Array.isArray(e.orders)) throw new TypeError("orders file: 'orders' must be an array");
+    const list: PlayerOrder[] = [];
+    for (const o of e.orders as Record<string, unknown>[]) {
+      if (typeof o.order_id !== "string" || typeof o.account !== "string") throw new TypeError("orders file: order_id and account must be strings");
+      if (o.kind !== "buy" && o.kind !== "sell" && o.kind !== "invest") throw new TypeError("orders file: kind must be buy, sell or invest");
+      list.push({
+        order_id: o.order_id,
+        account: o.account,
+        kind: o.kind,
+        item: typeof o.item === "string" ? o.item : undefined,
+        qty: toBig(o.qty, "qty"),
+        limit_price: toBig(o.limit_price, "limit_price"),
+        business_id: typeof o.business_id === "string" ? o.business_id : undefined,
+        amount: toBig(o.amount, "amount"),
+      });
+    }
+    out[e.step] = [...(out[e.step] ?? []), ...list];
+  }
+  return out;
+}
+
 /**
  * Replays simulation from genesis and verifies each checkpoint against replayed roots and flows.
  */
 export function verifyCheckpoints(options: VerifyOptions): VerifyResult {
-  const { arcId, seed, cityId, checkpoints, dataDir } = options;
+  const { arcId, seed, cityId, checkpoints, dataDir, orders } = options;
+  const executedIds = new Set<string>();
   const dir = dataDir ?? join(process.cwd(), "data");
 
   if (!Array.isArray(checkpoints) || checkpoints.length === 0) {
@@ -120,7 +163,8 @@ export function verifyCheckpoints(options: VerifyOptions): VerifyResult {
 
     // Replay step by step
     for (let s = cp.from_step + 1; s <= cp.to_step; s++) {
-      const res = step(currState, ctx);
+      const res = step(currState, { ...ctx, orders: orders?.[s] ?? [], executedIds });
+      for (const ev of res.events) if (ev.event === "order_accepted") executedIds.add(ev.order_id as string);
       currState = res.state;
       windowEvents.push(...res.events);
 

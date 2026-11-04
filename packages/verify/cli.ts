@@ -7,7 +7,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { verifyCheckpoints, computeRulesHash } from "./src/verify.ts";
+import { verifyCheckpoints, computeRulesHash, parseOrdersFile } from "./src/verify.ts";
 import type { Checkpoint } from "../sim/src/checkpoint.ts";
 
 function parseArgs(args: string[]): Record<string, string | boolean> {
@@ -56,7 +56,7 @@ function main(): void {
   const cpPath = flags.checkpoints;
 
   if (typeof arcId !== "string" || typeof seed !== "string" || typeof cityId !== "string" || typeof cpPath !== "string") {
-    console.error("Usage: node packages/verify/cli.ts --arc <id> --seed <string> --city <id> --checkpoints <file.json>");
+    console.error("Usage: node packages/verify/cli.ts --arc <id> --seed <string> --city <id> --checkpoints <file.json> [--orders <file.json>]");
     console.error("       node packages/verify/cli.ts --rules-hash [--arc <id>]");
     process.exit(1);
   }
@@ -70,11 +70,22 @@ function main(): void {
     process.exit(1);
   }
 
+  let orders: ReturnType<typeof parseOrdersFile> | undefined;
+  if (typeof flags.orders === "string") {
+    try {
+      orders = parseOrdersFile(JSON.parse(readFileSync(resolve(process.cwd(), flags.orders), "utf-8")));
+    } catch (err) {
+      console.error(`FAILED: unable to read orders file ${flags.orders}: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  }
+
   const result = verifyCheckpoints({
     arcId,
     seed,
     cityId,
     checkpoints,
+    orders,
   });
 
   for (const line of result.lines) {

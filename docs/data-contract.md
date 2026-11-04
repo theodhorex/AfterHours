@@ -77,19 +77,24 @@ For `coin`: `total_coin(new) = total_coin(old) + sourced_coin - sunk_coin - trad
 - A **sector proof** is the list of the other five sector roots plus `city_core`, enough to recompute `city_root` from one `sector_root`.
 
 ## 10. Checkpoint (sim -> contract), `packages/sim/src/checkpoint.ts`
+The Rust structs in `contracts/afterhours/src/checkpoint.rs` are the source of truth (amounts are `U128` decimal strings):
 ```
 Checkpoint {
   city_id, from_step, to_step, new_state_root, new_city_root, stage,
-  items: Record<item, { produced, consumed_recipe, consumed_pop, sourced, sunk, trade_net }>,
-  coin:  { sourced, sunk, trade_net },
-  player_deltas: [ { account, item, delta } ],        // item may be "coin"
-  executed_order_ids: string[]
+  items: Record<item, ItemFlow { produced, consumed_recipe, consumed_pop, sourced, sunk, trade_to_players, trade_from_players }>,
+  coin:  CoinFlow { sourced, sunk, trade_to_players, trade_from_players },
+  player_deltas: [ { account, token_id, delta_in, delta_out } ],   // token_id is an item id or "coin"
+  executed_order_ids: string[]                                       // accepted orders only
 }
 ```
-Contract checks (see contract spec): `from_step` equals stored step; arithmetic of section 7 holds against stored totals; `sum(player_deltas[item]) == trade_net[item]`; `produced`/`consumed_recipe` within `arc.stage` caps; only the operator may submit; no order id executed twice.
+`trade_to_players` = items or coin that leave the city to players; `trade_from_players` = items or coin that enter the city from players. Contract checks: `from_step` equals the stored step; `new_total = old + produced + sourced + trade_from_players - consumed_recipe - consumed_pop - sunk - trade_to_players` (coin: `old + sourced + trade_from_players - trade_to_players`); per-player deltas consistent with the flows; `produced`/`consumed_recipe`/`sourced`/`sunk` within the arc caps; only the operator may submit; no order id executed twice.
+
+**Player orders** (`packages/sim/src/orders.ts`, phase 2): `buy` (player takes items from city businesses at `market.price`, limit price, partial fills), `sell` (player gives items to businesses that use them as input), `invest` (coin into a business; reopens it if closed). The sim never tracks player balances; it only moves city-side coin and items and emits `order_accepted`/`order_rejected` (reasons: `duplicate`, `price_above_limit`, `price_below_limit`, `no_stock`, `no_buyer`, `unknown_business`, `invalid_amount`). **Arc events** (`packages/sim/src/events.ts`, phase 1) are stateless: whether an event starts at step `t` is drawn from a PRNG seeded by `leaf({w, c, s: t})` with probability `event_start_bps`; the active set is re-derived from the previous `max duration` steps, so no state field exists. `recipe_output_bps` is an output multiplier (10000 = normal, 4000 = 40% of normal, 15000 = 150%).
+
+**Verification** (`pnpm verify`): `node packages/verify/cli.ts --arc <id> --seed <s> --city <id> --checkpoints <file> [--orders <file>]` replays from genesis (including the same orders) and compares roots, stage and flows for every checkpoint.
 
 ## 11. Events (NEP-297 style JSON, `event` field is the type)
-`step_start`, `event_start`, `event_end`, `order_accepted`, `order_rejected`, `produced`, `traded`, `consumed_pop`, `price_update`, `business_closed`, `business_opened`, `dividends_paid`, `capital_injected`, `invested`, `population_change`, `stage_up`, `sector_transfer`, `step_end`. Each carries `city_id`, `step`, and typed integer fields as decimal strings.
+`step_start`, `event_start`, `event_end`, `order_accepted`, `order_rejected`, `business_reopened`, `inventory_sunk`, `produced`, `traded`, `consumed_pop`, `price_update`, `business_closed`, `business_opened`, `dividends_paid`, `capital_injected`, `invested`, `population_change`, `stage_up`, `sector_transfer`, `step_end`. Each carries `city_id`, `step`, and typed integer fields as decimal strings.
 
 ## 12. Agent rules (packages/rules) used by the sim
 `{ id, when: [cond<=3], do: action, cooldown }`. Conditions: `price(item) op v`, `stock(item) op v`, `season_in([0..3])`, `coin op v`. Actions: `buy(item, qty, max_price)`, `sell(item, qty, min_price)`, `produce(recipe, qty)`. Limits: <=8 rules per agent, qty <= business cap, <=K orders per step, fixed fee per fired rule (to treasury), no loops. Evaluated in listed order. Exact JSON schema is written by task A4.
