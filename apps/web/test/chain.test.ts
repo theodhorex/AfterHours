@@ -15,6 +15,8 @@ import {
   TESTNET_EXPECTED_STATE_ROOT,
   TESTNET_CHECKPOINTS,
   TESTNET_CHECKPOINT_TX_IDS,
+  TESTNET_CITIES,
+  TESTNET_CITY_IDS,
   buildExplorerTxUrl,
 } from "../src/data/testnet.ts";
 
@@ -208,19 +210,32 @@ describe("Chain API & Compare (TDD)", () => {
 
 describe("Testnet Deployment Constants & Explorer URL", () => {
   test("testnet constants match testnet deployment specs", () => {
-    assert.equal(TESTNET_CONTRACT_ID, "afterhours-11041910-theo.testnet");
+    assert.equal(TESTNET_CONTRACT_ID, "afterhours-11042120-theo.testnet");
     assert.equal(TESTNET_CITY_ID, "city-goblin_warrens");
     assert.equal(TESTNET_ARC_ID, "goblin_warrens");
     assert.equal(TESTNET_SEED, "demo");
     assert.equal(TESTNET_STEPS, 200);
     assert.equal(
       TESTNET_EXPECTED_STATE_ROOT,
-      "bc4fe79adc950876fc4cfd873fae3234124bf0d26dc5f059f5029e8798d754ac"
+      "22adb8808d9e0b7b3f4dfc1e1cac49a09c52ff1c975cc6c643045cac7c92bd6b"
     );
     assert.equal(TESTNET_CHECKPOINTS.length, 5);
     assert.equal(TESTNET_CHECKPOINT_TX_IDS.length, 5);
     assert.equal(TESTNET_CHECKPOINTS[0].toStep, 40);
     assert.equal(TESTNET_CHECKPOINTS[4].toStep, 200);
+
+    // 4-city deployment map specs
+    assert.equal(TESTNET_CITY_IDS.length, 4);
+    for (const cityId of TESTNET_CITY_IDS) {
+      const city = TESTNET_CITIES[cityId];
+      assert.ok(city);
+      assert.equal(city.steps, 200);
+      assert.equal(city.checkpoints.length, 5);
+      assert.equal(city.checkpoints[0].fromStep, 0);
+      assert.equal(city.checkpoints[0].toStep, 40);
+      assert.equal(city.checkpoints[4].fromStep, 160);
+      assert.equal(city.checkpoints[4].toStep, 200);
+    }
   });
 
   test("buildExplorerTxUrl creates correct NearBlocks tx URL", () => {

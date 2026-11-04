@@ -10,6 +10,10 @@ import {
   tamperCheckpoint,
   replayToStep,
 } from "../src/lib/audit.ts";
+import {
+  TESTNET_CITIES,
+  TESTNET_CITY_IDS,
+} from "../src/data/testnet.ts";
 
 describe("Audit Pure Logic (TDD)", () => {
   test("buildCheckpoints records checkpoints every 40 steps", () => {
@@ -169,17 +173,17 @@ describe("Audit Pure Logic (TDD)", () => {
     assert.equal(advancedAfterReset.seed, "different_seed_9");
   });
 
-  test("replayToStep replays deterministically to step 200 matching testnet root", () => {
-    const { stateRoot, step: reachedStep } = replayToStep(
-      "goblin_warrens",
-      "demo",
-      200,
-      "city-goblin_warrens"
-    );
-    assert.equal(reachedStep, 200);
-    assert.equal(
-      stateRoot,
-      "bc4fe79adc950876fc4cfd873fae3234124bf0d26dc5f059f5029e8798d754ac"
-    );
+  test("replayToStep replays deterministically for all four cities matching testnet root", () => {
+    for (const cityId of TESTNET_CITY_IDS) {
+      const city = TESTNET_CITIES[cityId];
+      const { stateRoot, step: reachedStep } = replayToStep(
+        city.arcId,
+        city.seed,
+        city.steps,
+        city.cityId
+      );
+      assert.equal(reachedStep, city.steps, `step mismatch for ${cityId}`);
+      assert.equal(stateRoot, city.finalStateRoot, `root mismatch for ${cityId}`);
+    }
   });
 });

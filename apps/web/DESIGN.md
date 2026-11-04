@@ -169,6 +169,12 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
   - *In-Progress State*: Animated spinner, progress bar active, inputs temporarily disabled.
   - *Verified State*: High-contrast moss banner (`--atlas-moss`) affirming replayed consistency: `"VERIFIED: N checkpoints match the replay"`.
   - *Mismatch / Tampered State*: Alert badge (`--atlas-alert`) displaying exact difference reason (e.g. `produced amount mismatch`, `new_state_root mismatch`, `stage mismatch`).
+- **NEAR Testnet Verification Layout (4 Cities)**:
+  - Accessible city selector tabs (`role="tablist"` / `role="tab"`) supporting keyboard navigation for the 4 deployed cities (`goblin_warrens`, `cave_hold`, `dino_vale`, `elf_grove`).
+  - Active city panel (`role="tabpanel"`) displaying arc metadata, seed, committed steps (200), and 5 on-chain checkpoint links with NearBlocks explorer URLs.
+  - Dual verification controls: Single-city browser replay comparison against `get_city` RPC and sequential "Verify all four" runner.
+  - 4-row summary table presenting city name, arc ID, replayed 200-step state root, and high-contrast VERIFIED / MISMATCH status badges.
+  - Fully responsive down to 360px viewport with wrap-friendly action buttons and horizontally scrollable summary tables.
 
 ---
 
