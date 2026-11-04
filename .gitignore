@@ -14,3 +14,4 @@ priv_key*
 *.log
 .DS_Store
 data/snapshots/
+*.tsbuildinfo

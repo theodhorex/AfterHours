@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+:root {
+  --atlas-canvas: #12100e;
+  --atlas-surface: #1f1b16;
+  --atlas-surface-raised: #2b241d;
+  --atlas-line: #3d3429;
+  --atlas-line-strong: #5a4c3b;
+  --atlas-ink: #f0e6d2;
+  --atlas-ink-muted: #bda88e;
+  --atlas-gold: #e5b358;
+  --atlas-ember: #f07f4f;
+  --atlas-moss: #6bc785;
+  --atlas-arcane: #b89df5;
+  --atlas-alert: #f26868;
+  --atlas-ash: #827768;
+}
+
+@theme inline {
+  --color-atlas-canvas: var(--atlas-canvas);
+  --color-atlas-surface: var(--atlas-surface);
+  --color-atlas-surface-raised: var(--atlas-surface-raised);
+  --color-atlas-line: var(--atlas-line);
+  --color-atlas-line-strong: var(--atlas-line-strong);
+  --color-atlas-ink: var(--atlas-ink);
+  --color-atlas-ink-muted: var(--atlas-ink-muted);
+  --color-atlas-gold: var(--atlas-gold);
+  --color-atlas-ember: var(--atlas-ember);
+  --color-atlas-moss: var(--atlas-moss);
+  --color-atlas-arcane: var(--atlas-arcane);
+  --color-atlas-alert: var(--atlas-alert);
+  --color-atlas-ash: var(--atlas-ash);
+
+  --font-display: var(--font-cinzel), Georgia, serif;
+  --font-body: var(--font-alegreya), Garamond, Georgia, serif;
+  --font-mono: var(--font-jb-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--atlas-canvas);
+    color: var(--atlas-ink);
+    font-family: var(--font-alegreya), Garamond, Georgia, serif;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--atlas-canvas);
+    color: var(--atlas-ink);
+    margin: 0;
+    min-height: 100vh;
+    overflow-x: clip;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-cinzel), Georgia, serif;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* Parchment card texture & subtle vignette border */
+.atlas-panel {
+  background-color: var(--atlas-surface);
+  border: 1px solid var(--atlas-line);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.4);
+}
+
+.atlas-panel-raised {
+  background-color: var(--atlas-surface-raised);
+  border: 1px solid var(--atlas-line-strong);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Interactive focus ring complying with WCAG AA */
+.atlas-focus {
+  outline: none;
+}
+.atlas-focus:focus-visible {
+  outline: 2px solid var(--atlas-gold);
+  outline-offset: 2px;
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
