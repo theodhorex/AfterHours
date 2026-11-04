@@ -1,80 +1,77 @@
-<h1 align="center">AfterEarth</h1>
+# AfterEarth
 
-<p align="center"><b>A fantasy world where merchants trade around the clock, cities can be sold, and every century of history can be replayed and checked against a root hash on NEAR.</b></p>
+**A fantasy economy you can audit: four cities trade around the clock, cities can be sold, and every season of history can be replayed and checked against a root hash on NEAR.**
 
-<p align="center">
-  <img src="https://img.shields.io/badge/NEAR-TESTNET-000000?style=flat-square&labelColor=555555" alt="NEAR testnet" />
-  <img src="https://img.shields.io/badge/TRACK-GAMES%20WITH%20REAL%20ECONOMIES-F4B728?style=flat-square&labelColor=555555" alt="Track" />
-  <img src="https://img.shields.io/badge/CONTRACT-RUST%20%C2%B7%20NEAR--SDK%205-627EEA?style=flat-square&labelColor=555555" alt="Rust" />
-  <img src="https://img.shields.io/badge/SIM-TYPESCRIPT%20%C2%B7%20ZERO%20DEPS-8B5CF6?style=flat-square&labelColor=555555" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/LICENSE-MIT-16A34A?style=flat-square&labelColor=555555" alt="MIT" />
-</p>
+Four fantasy cities run a full supply chain: farms, mills, bakeries, forges, workshops, alchemists. Citizens eat, businesses hire, some go bankrupt, and new entrepreneurs open shops. One step is one season. The simulation is deterministic and has no dependencies, so anyone can rebuild the same history from the same seed and compare it with the roots the contract stores. The working title was AfterHours; the product name is AfterEarth.
 
-> Working title was AfterHours; the product name is **AfterEarth**. Status: work in progress, built for the NEAR HACKATHON. Code in this repository was started on 2026-11-04.
+Built for the **NEAR HACKATHON**, track **Games With Real Economies**. Code started on 2026-11-04. Status: work in progress, testnet only.
 
----
+- **Contract (v2, with city market):** [`afterhours-11042023-theo.testnet`](https://testnet.nearblocks.io/address/afterhours-11042023-theo.testnet)
+- **First verified slice (v1):** [`afterhours-11041910-theo.testnet`](https://testnet.nearblocks.io/address/afterhours-11041910-theo.testnet), city `city-goblin_warrens`, 200 steps
+- **Network:** NEAR testnet, no real funds
+- **Repository:** https://github.com/theodhorex/AfterHours
+- **AI assistance and libraries:** [`docs/AI_AND_LIBRARIES.md`](docs/AI_AND_LIBRARIES.md)
 
-**AfterEarth is for players and judges who want an on-chain economy they can actually audit.** Four fantasy cities (Goblin Warrens, Cave Hold, Dino Vale, Elf Grove) run a full supply chain: farms, mills, bakeries, forges, workshops, alchemists. Citizens eat, businesses hire, go bankrupt, and new entrepreneurs open shops. One step is one season; the simulation covers 500 years.
+## Try It in Two Minutes
 
-> **The promise: nothing the operator says about the world has to be taken on trust.**
-> - The simulation is deterministic and has no dependencies. Anyone replays it from the seed.
-> - The contract stores a hash chain of state roots and checks conservation of every item and every coin.
-> - A browser Audit panel replays the city and compares its root with the one on NEAR. Tamper with a checkpoint and it prints `MISMATCH`.
->
-> It does **not** run the whole simulation on-chain, and it does not claim emergent behaviour it cannot show.
+You need Node 24 or newer. No install step for the simulation (TypeScript runs natively, zero dependencies).
 
-## Documentation
+1. **Do:** `git clone https://github.com/theodhorex/AfterHours && cd AfterHours`
+2. **Do:** `node scripts/demo_mock.ts`
+   **See:** 200 steps in five windows, then `VERIFIED: 5 checkpoints match the replay`.
+3. **Do:** `cd apps/web && pnpm install && pnpm dev`, open http://localhost:3000.
+   **See:** an isometric pixel-art city. Pick a world, press **Fast-Forward**.
+4. **Try:** open the **Audit** panel and press **Tamper with checkpoint 2**.
+   **See:** `MISMATCH ... new_state_root mismatch at step 80`. The replay caught the edit.
+5. **Try:** open **Trade routes** and run the 400-step caravan world.
+   **See:** Dino Vale ships bread to Elf Grove, both cities book the flows, badge **Conservation: OK**.
 
-| Section | Where |
-|---|---|
-| Data contract (arcs, checkpoint shape, caravans, world runner) | [`docs/data-contract.md`](docs/data-contract.md) |
-| Web design notes (arc themes, bubbles, daylight rule) | [`apps/web/DESIGN.md`](apps/web/DESIGN.md) |
-| AI assistance and libraries (Q-005) | [`docs/AI_AND_LIBRARIES.md`](docs/AI_AND_LIBRARIES.md) |
-| Contract source | [`contracts/afterhours/src`](contracts/afterhours/src) |
-| Simulation source | [`packages/sim/src`](packages/sim/src) |
+> Note: `pnpm verify` replays the current engine. A city published to testnet by an older engine version will not match until it is republished (see Limits).
 
-## What Makes AfterEarth Special
+## Developer Setup
 
-### Who This Is For
+**Tests.**
 
-Meet **Rin**, who plays economy games and distrusts every leaderboard. She wants to know that the market she trades in is not rigged by whoever runs the server. She does not want to read Rust; she wants a button that says *verified*.
+```bash
+node --test packages/sim/test/         # simulation, caravans, growth (162 tests, 2026-11-04)
+node --test packages/verify/test/      # replay verifier
+cd apps/web && node --test test/       # web logic, audit, a11y (109 tests)
+cd contracts/afterhours && cargo test --lib   # contract (80 tests)
+```
 
-### The Problem
+**Replay a checkpoint file against the engine.**
 
-- **Opaque economies**: players cannot tell whether prices, scarcity and rewards are fair.
-- **Off-chain history**: a "500-year world" is just a database the operator can edit.
-- **Assets without provenance**: cities and designs get sold, but nobody can prove what they were.
+```bash
+node packages/verify/cli.ts --arc goblin_warrens --seed demo --city city-goblin_warrens --checkpoints demo/checkpoints.json
+```
 
-**How might we make a living game economy whose entire history anyone can replay and check?**
+**Publish a city to your own testnet account.** Needs the `near` CLI and an account whose key is in the legacy keychain. Testnet only.
 
-### The Solution
+```bash
+cd contracts/afterhours && cargo build --release --target wasm32-unknown-unknown
+node scripts/testnet_publish.ts <your-account>.testnet
+```
 
-1. **Deterministic simulation**: pure TypeScript, bigint math, seeded PRNG, no dependencies. Same seed, same history, byte for byte.
-2. **Hash-chained roots**: each step commits to events and a per-sector Merkle tree, so a sector can be sold with a proof.
-3. **Conservation on-chain**: the contract rejects any checkpoint where items or coin appear from nowhere, bounded by per-arc caps.
-4. **Replay verifier**: a CLI and a browser panel rebuild the roots and report `VERIFIED` or the first step that differs.
-5. **A market**: cities can be listed and bought on-chain; players can write rule-based trading agents scored by a verifiable backtest.
+## The Problem
 
-## Features
+Game economies are black boxes. Players cannot tell whether prices, scarcity and rewards are fair, "500 years of history" is a database the operator can edit, and assets such as cities and designs are sold without any proof of what they were.
 
-- **Four Arcs**: Goblin Warrens, Cave Hold, Dino Vale, Elf Grove, each with its own recipes, prices, events and look.
-- **Living Cities**: bankruptcies, new entrepreneurs, population growth, four seasons per year.
-- **Isometric Pixel Art View**: fixed bright daytime, per-arc palettes, per-season variants, clickable icon bubbles.
-- **Audit Panel**: replay in the browser, tamper demo, compare with the NEAR testnet city root.
-- **Agent Rules**: a small rule language (max 8 rules, 3 conditions, fee per rule) with a verifiable backtest score and leaderboard.
-- **City Market**: `list_city`, `cancel_listing`, `buy_city` with escrow-style payout in NEAR.
-- **Inter-City Caravans**: Dino Vale ships bread to Elf Grove; both cities record the flows and the contract invariants still hold.
+AfterEarth makes the history itself the product: a deterministic world whose every root hash is stored on-chain and can be recomputed by anyone.
 
-## Tech Stack
+## How It Works
 
-| Layer | Technology |
-|---|---|
-| Simulation, rules, verifier | TypeScript on Node 24+ (native `.ts`, no build step, no dependencies) |
-| Smart contract | Rust, near-sdk 5, NEP-245 style multi-token balances |
-| Frontend | Next.js 16, React, PixiJS |
-| Chain | NEAR testnet only |
+```
+step (one season)  ->  events, state root, per-sector Merkle roots
+40 steps           ->  Checkpoint { item flows, coin flows, roots, order ids }
+contract           ->  check arc caps, check conservation, store roots
+verify / Audit     ->  replay from the seed, compare every root, report the first step that differs
+```
 
-## Architecture
+Conservation per item, enforced on every checkpoint:
+
+```
+old_total + produced + sourced + from_players  >=  consumed + sunk + to_players
+```
 
 ```mermaid
 sequenceDiagram
@@ -83,100 +80,77 @@ sequenceDiagram
     participant C as NEAR contract
     participant V as verify / Audit panel
     Op->>Sim: step x 40 (seed, arc, rules)
-    Sim-->>Op: events, state root, flows
-    Op->>C: submit_checkpoint(flows, new roots)
-    C->>C: check caps and conservation, store roots
+    Sim-->>Op: events, roots, flows
+    Op->>C: submit_checkpoint
+    C->>C: caps and conservation, store roots
     V->>Sim: replay from the same seed
     V->>C: get_city (state_root, step)
     V-->>V: VERIFIED or MISMATCH at step N
 ```
 
-```mermaid
-graph TD
-    A[data/arcs/*.json] --> B[packages/sim]
-    B --> C[checkpoint]
-    C --> D[contracts/afterhours]
-    B --> E[packages/verify CLI]
-    B --> F[apps/web Audit panel]
-    D --> F
-    style D fill:#f4b728,color:#000
-    style B fill:#8b5cf6,color:#fff
-```
+## Features
 
-## Try It in Two Minutes
+**Four arcs.** Goblin Warrens, Cave Hold, Dino Vale, Elf Grove. Each has its own recipes, prices, events, palette and signature props.
 
-Requires Node 24+ (and Rust only if you want the contract tests).
+**Living cities.** Bankruptcies, new entrepreneurs, population growth through stages, four seasons per year.
 
-```bash
-git clone https://github.com/theodhorex/AfterHours && cd AfterHours
-node scripts/demo_mock.ts          # 200 steps, 5 checkpoints, replay -> VERIFIED
-node --test packages/sim/test/     # simulation tests
-cd apps/web && pnpm install && pnpm dev   # open http://localhost:3000
-```
+**Audit.** A browser replay with a tamper demo, plus a button that compares the replayed root with the city root stored on NEAR through the public RPC.
 
-In the web app: pick a world, press **Fast-Forward**, open the **Audit** panel and press **Tamper with checkpoint 2** to see `MISMATCH ... new_state_root mismatch at step 80`. Open **Trade routes** and run the 400-step caravan world.
+**City market.** `list_city`, `cancel_listing`, `buy_city` with an NEAR payout to the seller.
 
-> Two traps worth knowing: the production build (`next build`) is not yet proven green on every machine (see Build Checklist), and `pnpm verify` replays the *current* engine, so a city published by an older engine version will not match.
+**Agents.** A small rule language (at most 8 rules, 3 conditions each, a fee per rule) with a backtest score anyone can reproduce, and a leaderboard.
 
-## How It Works
+**Inter-city caravans.** Goods move between two cities; the seller records a sink and receives coin, the buyer records a source and pays coin. Per-city conservation holds and the sum over both cities is unchanged.
 
-```
-step (season)  ->  events + state root + sector Merkle roots
-40 steps       ->  Checkpoint { flows per item, coin flows, roots, order ids }
-contract       ->  require(caps) ; require(conservation) ; store roots
-verify         ->  replay from seed ; compare every root
-```
+**Isometric view.** Pixel-sharp rendering, fixed bright daytime, per-season variants, clickable icon bubbles (hungry citizens, idle shops, events, trades).
 
-Conservation per item: `old_total + produced + sourced + from_players >= consumed + sunk + to_players`, applied on-chain to every checkpoint.
+## Security: Threat Model
 
-## Testnet Deployment
+| ID | Threat | Defence | Test |
+|---|---|---|---|
+| T1 | Operator edits history | hash chain plus replay, first differing step reported | `tamper`, `root_vectors` |
+| T2 | Operator inflates the city economy | per-arc caps on produced, consumed, sourced, sunk; per-checkpoint conservation | `checkpoint_tests` |
+| T3 | Operator mints player assets | **partial**: genesis totals and `trade_to_players` are operator-declared; capping them is in progress | review finding 1 |
+| T4 | Selling a city you do not own | owner check in `list_city` | `market_tests` |
+| T5 | Storage drain through dust transfers | `storage_deposit` required for receivers | `RECEIVER_NOT_REGISTERED` tests |
+| T6 | TS and Rust disagree on caps or shapes | differential tests against a generated fixture | `arc_caps_fixture`, `differential_tests` |
+| T7 | Replay of an old checkpoint | `from_step` must equal the stored step | `checkpoint_tests` |
 
-| Item | Value |
+An independent review of the contract (a different model from the one that wrote the code) found 14 issues on 2026-11-04: 1 high (T3), 4 medium, the rest low or informational. Fixes are scheduled and tracked in the Progress Log.
+
+## Measured on Testnet
+
+| What | Result |
 |---|---|
-| Network | NEAR testnet (no real funds) |
-| Contract v2 (with market) | `afterhours-11042023-theo.testnet` |
-| Status | deployed and initialised; the four demo cities are being republished after a simulation engine fix |
-| First slice (v1, kept as evidence) | `afterhours-11041910-theo.testnet`, city `city-goblin_warrens`, 200 steps, state root `bc4fe79a...54ac` matched the local replay |
+| Contract v1 account | `afterhours-11041910-theo.testnet` |
+| Arc registered | [`HhamH2JA...R73`](https://testnet.nearblocks.io/txns/HhamH2JAWy2Xzr33gtWJb4SRg2hMhCCgsSSFTbeLpR73) |
+| City created | [`8Tc1wjwZ...sHH`](https://testnet.nearblocks.io/txns/8Tc1wjwZPKREUDXfw1oiPFs8wKiYuEjrzxYWs8sUHKH) |
+| Checkpoint 0 to 40 | [`6aPz2kdH...kZ`](https://testnet.nearblocks.io/txns/6aPz2kdH2yR12KM3qrUuSNgEyqKnKwkuuYGQtkQWbkuZ) |
+| Checkpoint 40 to 80 | [`2MNM6QHo...e3`](https://testnet.nearblocks.io/txns/2MNM6QHo9tYcrvmqaQZzTPeSHo966TiW1A7xy8VWBie3) |
+| Checkpoint 80 to 120 | [`5pQBBhJc...Rd`](https://testnet.nearblocks.io/txns/5pQBBhJcuxPzEAEcWSWZprG3hwKoJtcXeJHq8rRn8Ryd) |
+| Checkpoint 120 to 160 | [`5HMkLBUn...7P`](https://testnet.nearblocks.io/txns/5HMkLBUnGYuzNWNBtTXfJSJB4ndmf8xiU95nMRyAQ7tP) |
+| Checkpoint 160 to 200 | [`Dt5AEsz7...Fg`](https://testnet.nearblocks.io/txns/Dt5AEsz7J52iZ58XSyy8jNeg7H4VmuThgjWpyqgU2FcG) |
+| On-chain state root at step 200 | `bc4fe79adc950876fc4cfd873fae3234124bf0d26dc5f059f5029e8798d754ac` |
+| Local replay root at step 200 | identical (2026-11-04) |
+| Contract v2 (with market) | deployed and initialised, `get_listing` answers `null`; the four cities will be republished here |
 
-The transaction table for the republished cities will be added here with explorer links. Testnet only; no secrets are committed.
+These transactions were made by the engine version of 2026-11-04 afternoon. The engine was fixed afterwards (stalled cities, see Progress Log), so the v1 city is kept as evidence of the mechanism, not as a current replay target.
 
-## Threat Model
+## What NEAR Makes Possible Here
 
-| Threat | Defence | Test |
-|---|---|---|
-| Operator edits history | hash chain plus replay | tamper test, `MISMATCH` |
-| Operator inflates the economy | produced, consumed, sourced and sunk are capped per arc and conserved per checkpoint. **Not yet covered:** items sent to players (`trade_to_players`) and city genesis totals are operator-declared and uncapped, so a hostile operator could still mint player assets (found by the independent review, fix in progress) | contract tests (80), review findings 1 and 5 |
-| Selling someone else's city | owner check on `list_city` | market tests |
-| Storage drain by dust transfers | `storage_deposit` required for receivers | `RECEIVER_NOT_REGISTERED` tests |
-| TS and Rust disagree on caps or shapes | differential tests against a generated fixture | `arc_caps_fixture`, `differential_tests` |
+- **Cheap, public checkpoints.** A root and a few flow counters per 40 steps fits easily in a transaction, so every season stays checkable.
+- **Fast finality.** A buyer can wait for a checkpoint to land before paying for a city.
+- **Native accounts and storage accounting.** Receivers register with `storage_deposit`; dust attacks cost the attacker.
+- **Public RPC.** The browser Audit panel reads the city root straight from NEAR, with no server of ours in the loop.
 
-## Repository Layout
+## Limits, Stated Plainly
 
-```
-data/        arc definitions, pricing and growth rules, generated fixtures
-packages/    sim (deterministic engine), rules (agent language), verify (replay CLI)
-contracts/   afterhours (NEAR contract, Rust)
-apps/        web (Next.js frontend)
-scripts/     demo_mock, testnet_publish, gen_arc_caps, economy_report
-docs/        data contract
-```
-
-## Build Checklist
-
-- [x] Deterministic simulation with conservation and checkpoints
-- [x] Contract: checkpoints, storage deposit, city market, differential tests
-- [x] Replay verifier CLI and browser Audit panel (compares with the NEAR city root)
-- [x] Four arcs with distinct looks, clickable icon bubbles
-- [x] Agent rules, verifiable backtest, leaderboard
-- [x] Inter-city caravans (library, world runner, web panel)
-- [x] First testnet city with matching root
-- [ ] Economy tuning: some cities stall or collapse on some seeds (engine fix in progress)
-- [ ] Republish four cities to the v2 contract with a transaction table
-- [x] Production `next build` proven green from a clean copy of the repository (2026-11-04)
-- [ ] Independent contract security review (in progress) and web accessibility pass (in progress)
-- [ ] Contract-side caravan settlement (today caravans are checked per city only)
-
-**One limitation worth naming:** the operator is trusted for availability, ordering and fairness of orders. History is checkable by replay, and conservation of the city economy is enforced on-chain, but player-bound transfers and genesis totals are still operator-declared today (an independent review flagged this; see Threat Model). City sales are paid in NEAR on testnet, not in game coin, and the sale price is not part of the replayed economy.
+- **Testnet only.** No real funds, no mainnet deployment, no token launch.
+- **The operator is trusted for availability, ordering and fairness of orders.** History is checkable by replay and the city economy is conserved on-chain. But genesis totals and player-bound transfers are still operator-declared today (finding 1 of the review).
+- **City sales are paid in NEAR on testnet, not in game coin.** The sale price is not part of the replayed economy.
+- **Caravans are checked per city, not settled jointly on-chain.** Each city's checkpoint must conserve; the contract does not see the counterparty.
+- **The economy is tuned, not proven.** Stage and population reach differ per arc and seed; see the Progress Log for the current numbers. We make no claim of emergent behaviour.
+- **Replay needs the same engine.** A city published by an older engine will show `MISMATCH` against a newer one by design.
 
 ## Progress Log
 
@@ -186,24 +160,44 @@ Updated after each accepted milestone.
 |---|---|
 | 2026-11-04 | Repo started. Deterministic simulation, conservation, checkpoints, replay verifier, contract with NEP-245 style balances |
 | 2026-11-04 | First testnet city: on-chain state root matched the local replay at step 200 |
-| 2026-11-04 | City market (`list_city`, `buy_city`), TS vs Rust differential tests, browser Audit against the NEAR root |
-| 2026-11-04 | Four arc themes, icon bubbles, inter-city caravans (library, world runner, web panel), clean production build |
-| 2026-11-04 | Independent contract review (14 findings, 1 high on operator trust, 4 medium); fixes scheduled |
-| 2026-11-04 | In progress: growth engine fix for stalled cities, contract security review, accessibility pass, republish of four cities |
+| 2026-11-04 | City market, TS vs Rust differential tests, browser Audit against the NEAR root |
+| 2026-11-04 | Four arc themes, icon bubbles, inter-city caravans (library, world runner, web panel), clean production build from a fresh copy |
+| 2026-11-04 | Accessibility pass: AA contrast, 44 px touch targets, scroll regions, live status, reduced motion |
+| 2026-11-04 | Independent contract review: 14 findings (1 high, 4 medium); fixes in progress |
+| 2026-11-04 | Growth engine fix: a stock-cap rule mismatch closed healthy businesses. Dino Vale now reaches stage 4 on three seeds, Cave Hold stage 2; Elf Grove still stalls at stage 1 (in progress) |
+
+## Repository Layout
+
+```
+data/        arc definitions, pricing and growth rules, generated fixtures
+packages/
+  sim/       deterministic engine, checkpoints, caravans, world runner
+  rules/     agent rule language and backtest
+  verify/    replay CLI
+contracts/
+  afterhours/  NEAR contract (Rust, near-sdk 5)
+apps/
+  web/       Next.js frontend (isometric view, Audit, Trade routes, Agents)
+scripts/     demo_mock, testnet_publish, gen_arc_caps, economy_report
+docs/        data contract, AI and library disclosure
+```
+
+## Built With
+
+- TypeScript on Node 24+ for simulation, rules and verifier (no dependencies)
+- Rust and near-sdk 5.30 for the contract
+- Next.js 16, React 19 and PixiJS 8 for the web app
+- All sprites are drawn procedurally; no third-party art
 
 ## Hackathon Notes
 
 - Code started 2026-11-04. The author also submits a separate NEAR project, Scrip; each README links the other.
-- AI assistance was used throughout development (planning, review and code generation with Claude and other models). Libraries are standard open source; no third-party game art is used, all sprites are drawn procedurally.
-- Testnet only. No real funds.
+- AI assistance was used throughout (planning, review, code generation); details in [`docs/AI_AND_LIBRARIES.md`](docs/AI_AND_LIBRARIES.md).
 
-## Project Info
+## License
 
-| | |
-|---|---|
-| Name | AfterEarth (working title AfterHours) |
-| Track | Games With Real Economies |
-| Chain | NEAR testnet |
-| License | MIT |
+MIT.
 
-> Every number in this world can be replayed. Do not trust it, check it.
+## About
+
+AfterEarth: a world whose history anyone can replay. Do not trust the operator, check the roots.
