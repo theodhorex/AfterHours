@@ -23,8 +23,8 @@ interface AgentsPanelProps {
 type RowVerifyStatus = "idle" | "verifying" | "verified" | "mismatch";
 
 export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
-  const [selectedPresetKey, setSelectedPresetKey] = useState<string>("bread-trader");
-  const [agentJson, setAgentJson] = useState<string>(PRESET_AGENTS["bread-trader"]);
+  const [selectedPresetKey, setSelectedPresetKey] = useState<string>("flour-trader");
+  const [agentJson, setAgentJson] = useState<string>(PRESET_AGENTS["flour-trader"]);
   const [steps, setSteps] = useState<number>(200);
   const [startCoinStr, setStartCoinStr] = useState<string>("2000");
 
@@ -186,7 +186,7 @@ export function AgentsPanel({ arcId, seed }: AgentsPanelProps) {
               disabled={isBacktesting}
               className="atlas-focus w-full bg-atlas-surface border border-atlas-line text-atlas-ink px-3 py-1.5 rounded-xs font-mono text-xs"
             >
-              <option value="bread-trader">Bread Trader (buy bread low, sell high)</option>
+              <option value="flour-trader">Flour Trader (buy flour low, sell high)</option>
               <option value="grain-hoarder">Grain Hoarder (stockpile agricultural surplus)</option>
               <option value="crystal-flipper">Crystal Flipper (speculate on arcane minerals)</option>
               <option value="idle">Idle Agent (passive, zero orders)</option>

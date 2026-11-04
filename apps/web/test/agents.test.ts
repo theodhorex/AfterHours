@@ -19,7 +19,7 @@ describe("Agents Pure Logic & Leaderboard (TDD)", () => {
   test("every preset parses on all four arcs", () => {
     const presetKeys = Object.keys(PRESET_AGENTS) as (keyof typeof PRESET_AGENTS)[];
     assert.ok(presetKeys.length >= 4, "must contain at least 4 presets");
-    assert.ok(PRESET_AGENTS["bread-trader"], "bread-trader preset exists");
+    assert.ok(PRESET_AGENTS["flour-trader"], "flour-trader preset exists");
     assert.ok(PRESET_AGENTS["grain-hoarder"], "grain-hoarder preset exists");
     assert.ok(PRESET_AGENTS["crystal-flipper"], "crystal-flipper preset exists");
     assert.ok(PRESET_AGENTS["idle"], "idle preset exists");

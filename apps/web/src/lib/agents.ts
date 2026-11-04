@@ -49,28 +49,28 @@ export const LEADERBOARD_STORAGE_KEY = "afterearth:agents:leaderboard";
 export const MAX_LEADERBOARD_ENTRIES = 20;
 
 export const PRESET_AGENTS: Record<string, string> = {
-  "bread-trader": JSON.stringify(
+  "flour-trader": JSON.stringify(
     {
       version: 1,
-      name: "Bread Trader",
+      name: "Flour Trader",
       rules: [
         {
-          id: "buy_bread_low",
+          id: "buy_flour_low",
           when: [
-            { kind: "price", item: "bread", op: "lte", value: "38" },
+            { kind: "price", item: "flour", op: "lte", value: "20" },
             { kind: "coin", op: "gte", value: "200" },
           ],
-          do: { kind: "buy", item: "bread", qty: "10", max_price: "42" },
-          cooldown: 2,
+          do: { kind: "buy", item: "flour", qty: "5", max_price: "20" },
+          cooldown: 1,
         },
         {
-          id: "sell_bread_high",
+          id: "sell_flour_high",
           when: [
-            { kind: "holding", item: "bread", op: "gte", value: "10" },
-            { kind: "price", item: "bread", op: "gte", value: "32" },
+            { kind: "holding", item: "flour", op: "gte", value: "5" },
+            { kind: "price", item: "flour", op: "gte", value: "35" },
           ],
-          do: { kind: "sell", item: "bread", qty: "10", min_price: "28" },
-          cooldown: 2,
+          do: { kind: "sell", item: "flour", qty: "5", min_price: "35" },
+          cooldown: 1,
         },
       ],
     },
