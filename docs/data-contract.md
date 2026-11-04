@@ -109,3 +109,21 @@ Inter-city caravan trade allows cities with different arcs to trade goods withou
   - Buyer City B: inventory is deposited into sector 0's first business and recorded in `flowsB.items[item].sourced`. City B pays from treasury (falling back to citizens purse) recorded as `flowsB.coin.sunk`.
 - **Conservation**: Per-city conservation is verified by `checkConservation` from `checkpoint.ts`. Globally, `sum(items)` and `sum(coin)` over both cities are strictly invariant, non-negative, and deterministic.
 
+## World runner
+
+The multi-city world runner (`runWorld(cfg)` in `packages/sim/src/world.ts`) coordinates multi-city simulation stepping, executes inter-city trade routes at periodic intervals (`caravanEvery`), and produces verifiable checkpoints across windows for all participating cities.
+
+- **Configuration**:
+  `cfg = { cities: [{ cityId, arcId, seed }...], steps, window, caravanEvery, routes: [{ from, to, item, maxQty }] }`
+- **Caravan execution**:
+  Every `caravanEvery` steps (after the individual city step, before roots computation), each configured route is evaluated between the live city states using `planCaravan` and `applyCaravan`.
+- **Synthetic events**:
+  When a caravan is executed, deterministic synthetic events are appended to each city's event list for that step:
+  - Seller city: `{ event: "caravan_out", kind: "caravan_out", city_id, step, item, qty, unitPrice, counterparty }`
+  - Buyer city: `{ event: "caravan_in", kind: "caravan_in", city_id, step, item, qty, unitPrice, counterparty }`
+  Quantities and prices are formatted as decimal strings. These events are hashed into the step's `eventRoot` and transitively commit to the city's state root.
+- **Checkpoint flow aggregation**:
+  Caravan item flows are merged into each city's window `Checkpoint`: seller item quantity into `items[item].sunk`, seller payment received into `coin.sourced`, buyer item quantity into `items[item].sourced`, and buyer payment paid into `coin.sunk`. These caravan flows add directly to the engine's internal flows and preserve `checkConservation` and global world conservation.
+- **Replay verification**:
+  Because caravan transactions depend on multi-city interaction and cross-city price spreads, a single city's checkpoints cannot be replayed in isolation without the counterparty states. The replay verifier reproduces caravan checkpoints by invoking `runWorld` with the identical `WorldConfig` (same cities, seeds, and routes), comparing the resulting roots and checkpoints.
+
