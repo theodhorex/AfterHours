@@ -4,7 +4,7 @@ import type { MockCity } from "../data/mock-city.ts";
 import { formatCoin, formatCount, formatStep } from "../lib/format.ts";
 
 interface HeaderProps {
-  city: MockCity;
+  city: MockCity & { stateRoot?: string };
 }
 
 export function Header({ city }: HeaderProps) {
@@ -39,7 +39,12 @@ export function Header({ city }: HeaderProps) {
 
           {/* World Clock & Stats */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-4 font-mono text-xs">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xs bg-atlas-surface-raised border border-atlas-line">
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xs bg-atlas-surface-raised border border-atlas-line"
+              role="timer"
+              aria-live="polite"
+              aria-atomic="true"
+            >
               <span className="text-atlas-ember text-sm" aria-hidden="true">⏳</span>
               <div>
                 <div className="text-atlas-ink font-bold">{formatStep(city.step)}</div>
@@ -62,6 +67,17 @@ export function Header({ city }: HeaderProps) {
                 <div className="text-[10px] text-atlas-ink-muted">City Treasury</div>
               </div>
             </div>
+
+            {/* Audit State Root */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xs bg-atlas-surface-raised border border-atlas-line">
+              <span className="text-atlas-arcane text-sm" aria-hidden="true">📜</span>
+              <div>
+                <div className="text-atlas-ink font-bold font-mono tracking-wider text-[11px]" title={city.stateRoot}>
+                  {city.stateRoot ? `${city.stateRoot.slice(0, 12)}…` : "—"}
+                </div>
+                <div className="text-[10px] text-atlas-ink-muted">state root</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -72,7 +88,7 @@ export function Header({ city }: HeaderProps) {
             <span>Autonomous settlement simulated state</span>
           </p>
           <span className="italic text-atlas-ink-muted/70">
-            Mock data, simulation not connected
+            Simulation running in your browser (mock mode, no chain)
           </span>
         </div>
       </div>

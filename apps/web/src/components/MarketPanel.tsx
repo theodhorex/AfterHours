@@ -55,7 +55,7 @@ export function MarketPanel({ items }: MarketPanelProps) {
             {items.map((item) => {
               const stockPct = Math.min(100, Math.round((item.stock / item.target) * 100));
               const isTooltipOpen = activeTooltipId === item.id;
-              const reasonSentence = explainText(item.explanation);
+              const reasonSentence = item.tooltip ?? explainText(item.explanation);
 
               return (
                 <tr

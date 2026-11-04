@@ -35,6 +35,7 @@ export interface MarketItem {
   dem_ema: number;
   dem_ref: number;
   change: "up" | "down" | "flat";
+  tooltip?: string;
   explanation: PriceExplanation;
 }
 

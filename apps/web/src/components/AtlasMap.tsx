@@ -6,6 +6,7 @@ interface AtlasMapProps {
   sectors: Sector[];
   selectedIdx: number;
   onSelectSector: (idx: number) => void;
+  cityName?: string;
 }
 
 interface DistrictConfig {
@@ -101,7 +102,7 @@ const DISTRICT_CONFIGS: Record<number, DistrictConfig> = {
   },
 };
 
-export function AtlasMap({ sectors, selectedIdx, onSelectSector }: AtlasMapProps) {
+export function AtlasMap({ sectors, selectedIdx, onSelectSector, cityName }: AtlasMapProps) {
   return (
     <div className="atlas-panel rounded-sm p-3 sm:p-5 relative overflow-hidden">
       {/* Map Header & Legend */}
@@ -139,7 +140,7 @@ export function AtlasMap({ sectors, selectedIdx, onSelectSector }: AtlasMapProps
           viewBox="0 0 860 560"
           className="w-full h-full select-none"
           role="region"
-          aria-label="Goblin Warrens district map"
+          aria-label={`${cityName ?? "Settlement"} district map`}
         >
           <defs>
             {/* Pattern for cavern bedrock */}
