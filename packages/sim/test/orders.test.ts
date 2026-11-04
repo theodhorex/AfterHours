@@ -7,6 +7,7 @@ import { genesis } from "../src/genesis.ts";
 import { parsePricingRules } from "../src/pricing.ts";
 import { parseGrowthRules } from "../src/growth.ts";
 import { step } from "../src/step.ts";
+import { buildCheckpoint, checkConservation, checkPlayerDeltas } from "../src/checkpoint.ts";
 import type { PlayerOrder } from "../src/orders.ts";
 
 const root = process.cwd();
@@ -276,4 +277,61 @@ test("happy path: invest order reopens closed business", () => {
   const afterBiz = res.state.sectors.flatMap((s) => s.businesses).find((b) => b.id === primaryBiz.id)!;
   assert.equal(afterBiz.open, true);
   assert.equal(afterBiz.insolvent_steps, 0);
+});
+
+test("orders guard: fee with zero or negative amount is rejected", () => {
+  const s0 = genesis(arc, "city-orders-test", "seed-fee-zero");
+  const ctx = { arc, pricing, growth };
+  const orders: PlayerOrder[] = [
+    { order_id: "ord-fee-0", account: "agent.near", kind: "fee", amount: 0n },
+    { order_id: "ord-fee-neg", account: "agent.near", kind: "fee", amount: -5n },
+  ];
+
+  const res = step(s0, { ...ctx, orders });
+  const rejections = res.events.filter((e) => e.event === "order_rejected");
+  assert.equal(rejections.length, 2);
+  assert.equal(rejections[0].order_id, "ord-fee-0");
+  assert.equal(rejections[0].reason, "zero_amount");
+  assert.equal(rejections[1].order_id, "ord-fee-neg");
+  assert.equal(rejections[1].reason, "zero_amount");
+});
+
+test("happy path: fee order funds treasury and conserves totals", () => {
+  const s0 = genesis(arc, "city-orders-test", "seed-fee-happy");
+  const ctx = { arc, pricing, growth };
+  const initialTreasury = s0.treasury;
+  const initialCoin = s0.totals.coin;
+  const orders: PlayerOrder[] = [
+    { order_id: "ord-fee-ok", account: "agent.near", kind: "fee", amount: 100n },
+  ];
+
+  const res = step(s0, { ...ctx, orders });
+  const accepted = res.events.find((e) => e.event === "order_accepted" && e.order_id === "ord-fee-ok");
+  assert.ok(accepted);
+  assert.equal(accepted.kind, "fee");
+  assert.equal(accepted.amount, "100");
+  assert.equal(accepted.total_coin, "100");
+
+  // Treasury increased
+  assert.equal(res.state.treasury, initialTreasury + 100n);
+
+  // Totals coin increased by fee
+  assert.equal(res.state.totals.coin, initialCoin + 100n);
+
+  // Physical sum matches totals.coin
+  let sumCoin = res.state.citizens.purse + res.state.treasury;
+  for (const s of res.state.sectors) for (const b of s.businesses) sumCoin += b.coin;
+  assert.equal(res.state.totals.coin, sumCoin);
+
+  // Checkpoint verifies flow conservation
+  const cp = buildCheckpoint({
+    prev: s0,
+    next: res.state,
+    events: res.events,
+    stateRoot: "0".repeat(64),
+  });
+  assert.equal(cp.coin.trade_from_players, "100");
+  assert.ok(checkPlayerDeltas(cp));
+  const conserved = checkConservation(s0.totals, cp);
+  assert.equal(conserved.coin, res.state.totals.coin);
 });

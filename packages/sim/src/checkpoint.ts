@@ -126,7 +126,7 @@ export function buildCheckpoint(params: BuildCheckpointParams): Checkpoint {
         coinToPlayers += totalCoin;
         getDelta(account, item).delta_out += filled;
         getDelta(account, "coin").delta_in += totalCoin;
-      } else if (e.kind === "invest") {
+      } else if (e.kind === "invest" || e.kind === "fee") {
         const totalCoin = BigInt((e.total_coin ?? (e.amount as string | bigint | number)) ?? 0);
         coinFromPlayers += totalCoin;
         getDelta(account, "coin").delta_out += totalCoin;

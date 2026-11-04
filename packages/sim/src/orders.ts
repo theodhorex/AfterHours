@@ -8,7 +8,7 @@ import type { ArcFile, ArcRecipe, Business, CityState, SimEvent } from "./types.
 export interface PlayerOrder {
   order_id: string;
   account: string;
-  kind: "buy" | "sell" | "invest";
+  kind: "buy" | "sell" | "invest" | "fee";
   item?: string;
   qty?: bigint;
   limit_price?: bigint;
@@ -287,6 +287,32 @@ export function processOrdersPhase(
         account: o.account,
         kind: "invest",
         business_id: targetBiz.id,
+        amount: o.amount.toString(),
+        total_coin: o.amount.toString(),
+      });
+    } else if (o.kind === "fee") {
+      if (o.amount === undefined || o.amount <= 0n) {
+        events.push({
+          event: "order_rejected",
+          city_id: state.city_id,
+          step: state.step,
+          order_id: o.order_id,
+          account: o.account,
+          reason: "zero_amount",
+        });
+        continue;
+      }
+
+      state.treasury += o.amount;
+      acceptedOrderIds.push(o.order_id);
+      if (executedIds) executedIds.add(o.order_id);
+      events.push({
+        event: "order_accepted",
+        city_id: state.city_id,
+        step: state.step,
+        order_id: o.order_id,
+        account: o.account,
+        kind: "fee",
         amount: o.amount.toString(),
         total_coin: o.amount.toString(),
       });

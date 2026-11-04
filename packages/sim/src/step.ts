@@ -428,7 +428,7 @@ export function step(state: CityState, ctx: StepContext, ordersArg?: PlayerOrder
         coinTradeFromPlayers += BigInt((e.total_coin as string | bigint | number) ?? 0);
       } else if (e.kind === "sell") {
         coinTradeToPlayers += BigInt((e.total_coin as string | bigint | number) ?? 0);
-      } else if (e.kind === "invest") {
+      } else if (e.kind === "invest" || e.kind === "fee") {
         coinTradeFromPlayers += BigInt((e.total_coin ?? e.amount as string | bigint | number) ?? 0);
       }
     }
