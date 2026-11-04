@@ -1,20 +1,20 @@
 /**
- * Isometric Scene Renderer built on PixiJS v8.
- * Assembles ground, roads, entities, ambient props, and handles interaction.
- * Delegates road-traffic and particle updates to IsoAnimationManager.
+ * Isometric Scene Renderer built on PixiJS v8 with pixel-sharp nearest-neighbour rendering.
+ * Applies per-arc and per-season themes, weather particle layer, 1px dark outlines,
+ * roundPixels on sprites, and smooth season tint/weather transitions.
  */
 
 import {
   Container,
   Sprite,
-  Graphics,
-  Text,
-  TextStyle,
   type Application,
 } from "pixi.js";
 import { isoToScreen, depthSortKey, isClick, getTileVariant } from "./iso-math.ts";
 import { IsoTextureManager } from "./sprites.ts";
 import { IsoAnimationManager, generateActors } from "./animation.ts";
+import { IsoWeatherManager } from "./weather.ts";
+import { getTheme, type ThemeTokens } from "./theme.ts";
+import { drawDistrictHighlights, makeBuildingBadge } from "./render-ui.ts";
 import type { TerrainMap } from "./terrain.ts";
 import type { CityLayout, BuildingLayout } from "./layout.ts";
 
@@ -31,11 +31,16 @@ export class IsoCityScene {
   private entitiesLayer = new Container();
   private actorsLayer = new Container();
   private effectsLayer = new Container();
+  private weatherManager = new IsoWeatherManager();
   private uiLayer = new Container();
 
   private textureManager: IsoTextureManager;
   private animManager: IsoAnimationManager;
+  private currentTerrain: TerrainMap | null = null;
   private currentLayout: CityLayout | null = null;
+  private currentArcId = "";
+  private currentSeason = 0;
+  private currentTheme: ThemeTokens | null = null;
   private selectedIdx = 0;
   private callbacks: IsoSceneCallbacks;
   private allowMotion = true;
@@ -53,6 +58,7 @@ export class IsoCityScene {
       this.entitiesLayer,
       this.actorsLayer,
       this.effectsLayer,
+      this.weatherManager.layer,
       this.uiLayer
     );
     this.animManager = new IsoAnimationManager(
@@ -72,11 +78,31 @@ export class IsoCityScene {
     layout: CityLayout,
     arcId: string,
     selectedIdx: number,
-    allowMotion: boolean
+    allowMotion: boolean,
+    season = 0
   ): void {
+    // If only season changed on the exact same layout and arc, swap tints and weather smoothly
+    if (
+      this.currentTerrain === terrain &&
+      this.currentLayout === layout &&
+      this.currentArcId === arcId &&
+      this.currentSeason !== season
+    ) {
+      this.setSeason(season, allowMotion);
+      this.updateSelection(selectedIdx);
+      return;
+    }
+
+    this.currentTerrain = terrain;
     this.currentLayout = layout;
+    this.currentArcId = arcId;
+    this.currentSeason = season;
     this.selectedIdx = selectedIdx;
     this.allowMotion = allowMotion;
+
+    const theme = getTheme(arcId, season);
+    this.currentTheme = theme;
+    this.root.tint = theme.ambientTint;
 
     this.clearScene();
     const tm = this.textureManager;
@@ -86,13 +112,14 @@ export class IsoCityScene {
     const glowOrigins: Array<{ x: number; y: number }> = [];
     const bobSprites: Sprite[] = [];
 
-    // 1. Ground tiles with deterministic shade variants
+    // 1. Ground tiles with nearest-neighbour scaling and roundPixels
     for (let y = 0; y < terrain.size; y++) {
       for (let x = 0; x < terrain.size; x++) {
         const kind = terrain.tiles[y][x];
         const variant = getTileVariant(x, y, 3);
-        const tex = tm.getTileTexture(kind, arcId, variant);
+        const tex = tm.getTileTexture(kind, arcId, variant, 0, season);
         const spr = new Sprite(tex);
+        spr.roundPixels = true;
         const scr = isoToScreen(x, y);
         spr.position.set(scr.x, scr.y);
         spr.anchor.set(0.5, 0.44);
@@ -105,20 +132,21 @@ export class IsoCityScene {
       }
     }
 
-    // 2. Road tiles with edge lines & corner/junction masks
+    // 2. Road tiles with edge lines & connection masks
     const roadSet = new Set<string>();
     for (const r of layout.roads) roadSet.add(`${r.x},${r.y}`);
 
     for (const r of layout.roads) {
       let mask = 0;
-      if (roadSet.has(`${r.x},${r.y - 1}`)) mask |= 1; // North
-      if (roadSet.has(`${r.x + 1},${r.y}`)) mask |= 2; // East
-      if (roadSet.has(`${r.x},${r.y + 1}`)) mask |= 4; // South
-      if (roadSet.has(`${r.x - 1},${r.y}`)) mask |= 8; // West
+      if (roadSet.has(`${r.x},${r.y - 1}`)) mask |= 1;
+      if (roadSet.has(`${r.x + 1},${r.y}`)) mask |= 2;
+      if (roadSet.has(`${r.x},${r.y + 1}`)) mask |= 4;
+      if (roadSet.has(`${r.x - 1},${r.y}`)) mask |= 8;
 
       const variant = getTileVariant(r.x, r.y, 2);
-      const tex = tm.getTileTexture(r.isBridge ? "bridge" : "road", arcId, variant, mask);
+      const tex = tm.getTileTexture(r.isBridge ? "bridge" : "road", arcId, variant, mask, season);
       const spr = new Sprite(tex);
+      spr.roundPixels = true;
       const scr = isoToScreen(r.x, r.y);
       spr.position.set(scr.x, scr.y);
       spr.anchor.set(0.5, 0.44);
@@ -127,18 +155,19 @@ export class IsoCityScene {
     }
 
     // 3. District Zone territory & halos
-    this.drawDistrictHighlights(layout);
+    drawDistrictHighlights(this.zoneLayer, layout, this.selectedIdx, this.callbacks);
 
-    // 4. Entities (Trees, Houses, Landmarks) sorted by isometric depth
+    // 4. Entities (Trees, Houses, Landmarks) sorted by depth
     const entityDisplayList: Array<{ container: Container; depth: number }> = [];
 
-    // Ambient Trees on forest tiles
+    // Ambient Trees on forest tiles (giant mushrooms for goblin warrens, etc.)
     for (let y = 0; y < terrain.size; y++) {
       for (let x = 0; x < terrain.size; x++) {
         if (terrain.tiles[y][x] === "forest") {
           const treeType = getTileVariant(x, y, 3);
-          const tex = tm.getTreeTexture(treeType, arcId);
+          const tex = tm.getTreeTexture(treeType, arcId, season);
           const spr = new Sprite(tex);
+          spr.roundPixels = true;
           const scr = isoToScreen(x, y);
           spr.position.set(scr.x, scr.y);
           spr.anchor.set(0.5, 0.88);
@@ -153,11 +182,25 @@ export class IsoCityScene {
       }
     }
 
-    // Residential Citizen Houses (4 deterministic variants)
+    // Roadside trees from the layout (arc-themed tree texture)
+    for (const pr of layout.props ?? []) {
+      const tex = tm.getTreeTexture(getTileVariant(pr.tileX, pr.tileY, 3), arcId, season);
+      const spr = new Sprite(tex);
+      spr.roundPixels = true;
+      const scr = isoToScreen(pr.tileX, pr.tileY);
+      spr.position.set(scr.x, scr.y);
+      spr.anchor.set(0.5, 0.88);
+      spr.eventMode = "none";
+      trees.push(spr);
+      entityDisplayList.push({ container: spr, depth: depthSortKey(pr.tileX, pr.tileY, 0) });
+    }
+
+    // Residential Citizen Houses (mushroom-cap cottages & cave huts for goblins)
     for (const h of layout.houses) {
       const variant = getTileVariant(h.tileX, h.tileY, 4);
-      const tex = tm.getHouseTexture(variant, h.level, arcId);
+      const tex = tm.getHouseTexture(variant, h.level, arcId, season);
       const spr = new Sprite(tex);
+      spr.roundPixels = true;
       const scr = isoToScreen(h.tileX, h.tileY);
       spr.position.set(scr.x, scr.y);
       spr.anchor.set(0.5, 0.85);
@@ -170,12 +213,10 @@ export class IsoCityScene {
         depth: depthSortKey(h.tileX, h.tileY, 1),
       });
 
-      // Flickering lit window on some houses (capped for cost)
       if (variant % 2 === 1 && glowOrigins.length < 24) {
         glowOrigins.push({ x: scr.x + 6, y: scr.y - 14 });
       }
 
-      // Ambient chimney smoke on some higher level houses
       if (h.level >= 2 && variant % 2 === 0) {
         smokeOrigins.push({ x: scr.x + 6, y: scr.y - 28 });
       }
@@ -185,8 +226,9 @@ export class IsoCityScene {
     for (const b of layout.buildings) {
       const sec = layout.sectors.find((s) => s.idx === b.sectorIdx);
       const sectorKind = sec?.kind ?? "food";
-      const tex = tm.getBuildingTexture(sectorKind, b.level, b.ruined, arcId);
+      const tex = tm.getBuildingTexture(sectorKind, b.level, b.ruined, arcId, season);
       const spr = new Sprite(tex);
+      spr.roundPixels = true;
       const scr = isoToScreen(b.tileX, b.tileY);
       spr.position.set(scr.x, scr.y);
       spr.anchor.set(0.5, 0.85);
@@ -198,7 +240,6 @@ export class IsoCityScene {
       bContainer.eventMode = "static";
       bContainer.cursor = "pointer";
 
-      // Select ONLY on click without drag (>4px)
       let downPos = { x: 0, y: 0 };
       bContainer.on("pointerdown", (e) => {
         downPos = { x: e.global.x, y: e.global.y };
@@ -226,7 +267,6 @@ export class IsoCityScene {
         depth: depthSortKey(b.tileX, b.tileY, 2),
       });
 
-      // Chimney smoke emitters for open workshops
       if (b.open && !b.ruined) {
         if (sectorKind === "forge" || sectorKind === "ore") {
           smokeOrigins.push({ x: scr.x + 10, y: scr.y - 38 });
@@ -242,7 +282,10 @@ export class IsoCityScene {
       this.entitiesLayer.addChild(item.container);
     }
 
-    // 5. Setup Life Animation (citizens & carts along roads, smoke, swaying trees)
+    // 5. Setup Weather Particle Layer (pooled, max 80, disabled with reduced motion)
+    this.weatherManager.setWeather(theme.weather, theme, this.allowMotion);
+
+    // 6. Setup Life Animation (smoke, glows, trees, traffic)
     if (this.allowMotion) {
       const openCount = layout.buildings.filter((b) => b.open && !b.ruined).length;
       const actors = generateActors(
@@ -252,13 +295,25 @@ export class IsoCityScene {
         layout.houses.length * 6,
         openCount
       );
-      this.animManager.setup(actors, smokeOrigins, trees, waterSprites, arcId, glowOrigins, bobSprites);
+      this.animManager.setup(
+        actors,
+        smokeOrigins,
+        trees,
+        waterSprites,
+        arcId,
+        glowOrigins,
+        bobSprites,
+        theme.building.chimneySmoke,
+        theme.smokeThickness,
+        theme.building.windowLit,
+        theme.windowGlowLevel
+      );
     }
 
-    // 6. Update Selection ring and badge
+    // 7. Update Selection ring and badge
     this.updateSelection();
 
-    // 7. Manage ticker
+    // 8. Manage ticker
     if (this.allowMotion && !this.tickerRunning) {
       this.app.ticker.add(this.onTick);
       this.tickerRunning = true;
@@ -268,42 +323,13 @@ export class IsoCityScene {
     }
   }
 
-  private drawDistrictHighlights(layout: CityLayout): void {
-    this.zoneLayer.removeChildren();
-
-    for (const sec of layout.sectors) {
-      const isSelected = sec.idx === this.selectedIdx;
-      const g = new Graphics();
-      const scr = isoToScreen(sec.centerX, sec.centerY);
-
-      // Territory boundary & radial halo
-      g.ellipse(scr.x, scr.y, 44, 22).stroke({
-        color: isSelected ? 0xe5b358 : 0x5a4c3b,
-        width: isSelected ? 2.5 : 1,
-        alpha: isSelected ? 0.95 : 0.4,
-      });
-
-      if (isSelected) {
-        g.ellipse(scr.x, scr.y, 44, 22).fill({ color: 0xe5b358, alpha: 0.16 });
-      }
-
-      g.eventMode = "static";
-      g.cursor = "pointer";
-
-      let downPos = { x: 0, y: 0 };
-      g.on("pointerdown", (e) => {
-        downPos = { x: e.global.x, y: e.global.y };
-      });
-      g.on("pointerup", (e) => {
-        const dx = e.global.x - downPos.x;
-        const dy = e.global.y - downPos.y;
-        if (isClick(dx, dy, 4)) {
-          this.callbacks.onSelectSector?.(sec.idx);
-        }
-      });
-
-      this.zoneLayer.addChild(g);
-    }
+  public setSeason(season: number, allowMotion = this.allowMotion): void {
+    this.currentSeason = season;
+    if (!this.currentArcId) return;
+    const theme = getTheme(this.currentArcId, season);
+    this.currentTheme = theme;
+    this.root.tint = theme.ambientTint;
+    this.weatherManager.setWeather(theme.weather, theme, allowMotion);
   }
 
   public updateSelection(newIdx?: number): void {
@@ -311,61 +337,23 @@ export class IsoCityScene {
       this.selectedIdx = newIdx;
     }
     if (this.currentLayout) {
-      this.drawDistrictHighlights(this.currentLayout);
+      drawDistrictHighlights(this.zoneLayer, this.currentLayout, this.selectedIdx, this.callbacks);
       this.selBadge?.destroy({ children: true });
       this.selBadge = null;
       const b = this.currentLayout.buildings.find((x) => x.sectorIdx === this.selectedIdx);
       if (b) {
         const sec = this.currentLayout.sectors.find((s) => s.idx === b.sectorIdx);
         const scr = isoToScreen(b.tileX, b.tileY);
-        this.selBadge = this.makeBadge(b, scr.x, scr.y, sec?.name ?? "District");
+        this.selBadge = makeBuildingBadge(b, scr.x, scr.y, sec?.name ?? "District");
+        this.uiLayer.addChild(this.selBadge);
       }
     }
   }
 
-  private showHoverLabel(
-    b: BuildingLayout,
-    x: number,
-    y: number,
-    sectorName: string
-  ): void {
+  private showHoverLabel(b: BuildingLayout, x: number, y: number, sectorName: string): void {
     this.hideHoverLabel();
-    this.hoverBadge = this.makeBadge(b, x, y, sectorName);
-  }
-
-  private makeBadge(
-    b: BuildingLayout,
-    x: number,
-    y: number,
-    sectorName: string
-  ): Container {
-    const badge = new Container();
-    const isRuined = b.ruined || !b.open;
-    const style = new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 10,
-      fill: isRuined ? 0xf26868 : 0xf0e6d2,
-      fontWeight: "bold",
-    });
-    const labelText = new Text({
-      text: `${b.name} [${isRuined ? "Ruined" : "Open"}] • ${sectorName}`,
-      style,
-    });
-    labelText.anchor.set(0.5, 1);
-    labelText.position.set(0, -6);
-    const pad = 6;
-    const w = labelText.width + pad * 2;
-    const h = labelText.height + pad;
-    const bg = new Graphics()
-      .rect(-w / 2, -h - 6, w, h)
-      .fill({ color: 0x12100e, alpha: 0.92 })
-      .stroke({ color: isRuined ? 0xf26868 : 0xe5b358, width: 1.2 });
-
-    badge.addChild(bg, labelText);
-    badge.position.set(x, y - 32);
-    badge.eventMode = "none";
-    this.uiLayer.addChild(badge);
-    return badge;
+    this.hoverBadge = makeBuildingBadge(b, x, y, sectorName);
+    this.uiLayer.addChild(this.hoverBadge);
   }
 
   private hideHoverLabel(): void {
@@ -376,7 +364,10 @@ export class IsoCityScene {
   }
 
   private onTick = (): void => {
-    if (this.allowMotion) this.animManager.update();
+    if (this.allowMotion) {
+      this.animManager.update();
+      this.weatherManager.update();
+    }
   };
 
   private clearScene(): void {
@@ -390,6 +381,7 @@ export class IsoCityScene {
     this.hoverBadge = null;
     this.selBadge = null;
     this.animManager.clear();
+    this.weatherManager.clear();
   }
 
   public destroy(): void {
@@ -399,6 +391,7 @@ export class IsoCityScene {
     }
     this.clearScene();
     this.animManager.destroy();
+    this.weatherManager.destroy();
     this.textureManager.destroy();
     this.root.destroy({ children: true });
   }

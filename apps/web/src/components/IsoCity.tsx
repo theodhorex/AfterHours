@@ -15,11 +15,12 @@ export interface IsoCityProps {
   seed?: string;
 }
 
-const MIN_ZOOM = 0.35;
+const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3.0;
 
 function clampZoom(z: number): number {
-  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(z * 100) / 100));
+  const stepped = Math.round(z * 4) / 4; // integer-friendly 0.25 zoom steps
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, stepped));
 }
 
 function prefersReducedMotion(): boolean {
@@ -127,7 +128,7 @@ export function IsoCity({
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      zoomBy(e.deltaY > 0 ? -0.1 : 0.1);
+      zoomBy(e.deltaY > 0 ? -0.25 : 0.25);
     };
 
     (async () => {
@@ -136,7 +137,8 @@ export function IsoCity({
         width: Math.max(container.clientWidth, 200),
         height: Math.max(container.clientHeight, 200),
         backgroundColor: 0x12100e,
-        antialias: true,
+        roundPixels: true,
+        antialias: false,
         resolution: Math.min(window.devicePixelRatio || 1, 2),
         autoDensity: true,
       });
@@ -183,9 +185,10 @@ export function IsoCity({
 
   // Rebuild scene when the world changes (new business, closure, stage, population) — app is kept.
   const firstBuildRef = useRef(true);
+  const season = typeof city.step === "number" ? ((city.step % 4) + 4) % 4 : 0;
   useEffect(() => {
     if (!ready || !sceneRef.current) return;
-    sceneRef.current.buildScene(terrain, layout, city.arc_id, selectedRef.current, !prefersReducedMotion());
+    sceneRef.current.buildScene(terrain, layout, city.arc_id, selectedRef.current, !prefersReducedMotion(), season);
     if (firstBuildRef.current) {
       firstBuildRef.current = false;
       recenter();
@@ -193,7 +196,7 @@ export function IsoCity({
       const { x, y, zoom } = camRef.current;
       sceneRef.current.setCamera(x, y, zoom);
     }
-  }, [ready, terrain, layout, city.arc_id, recenter]);
+  }, [ready, terrain, layout, city.arc_id, season, recenter]);
 
   // Selection only redraws the highlight ring and label
   useEffect(() => {
@@ -248,7 +251,7 @@ export function IsoCity({
         <div className="flex items-center gap-1.5 bg-atlas-canvas/80 p-1 rounded border border-atlas-line text-xs font-mono">
           <button
             type="button"
-            onClick={() => zoomBy(0.15)}
+            onClick={() => zoomBy(0.25)}
             aria-label="Zoom in"
             title="Zoom in"
             className="atlas-focus px-2 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"
@@ -257,7 +260,7 @@ export function IsoCity({
           </button>
           <button
             type="button"
-            onClick={() => zoomBy(-0.15)}
+            onClick={() => zoomBy(-0.25)}
             aria-label="Zoom out"
             title="Zoom out"
             className="atlas-focus px-2 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"

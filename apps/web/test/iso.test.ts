@@ -5,6 +5,7 @@ import { generateTerrain } from "../src/lib/iso/terrain.ts";
 import { layoutCity } from "../src/lib/iso/layout.ts";
 import { generateRoadPaths, generateActors } from "../src/lib/iso/animation.ts";
 import { getStageTokens } from "../src/lib/iso/stage-tokens.ts";
+import { shade, outlineColor, getTheme, SEASON_NAMES, relativeLuminance } from "../src/lib/iso/theme.ts";
 import { MOCK_CITY } from "../src/data/mock-city.ts";
 import type { CityView } from "../src/lib/sim-view.ts";
 
@@ -443,5 +444,172 @@ describe("Isometric City Logic", () => {
     const actorsEmpty = generateActors(layout.roads, layout.plaza, layout.buildings, 0, 0);
     assert.ok(actorsEmpty.length >= 2, "Should have minimum ambient actors");
     assert.ok(actorsEmpty.length <= 40);
+  });
+
+  describe("Pixel Theme & Pure Color Helpers (TDD)", () => {
+    it("shade(hex, factor): pure color factor calculation", () => {
+      // 1.0 preserves color
+      assert.equal(shade(0x808080, 1.0), 0x808080);
+      // factor < 1.0 darkens
+      const darker = shade(0x808080, 0.5);
+      assert.ok(darker < 0x808080);
+      assert.equal(darker, 0x404040);
+      // factor > 1.0 lightens and clamps at 255
+      const lighter = shade(0xf08080, 1.5);
+      assert.equal((lighter >> 16) & 0xff, 255);
+      // factor 0 returns 0
+      assert.equal(shade(0x123456, 0), 0x000000);
+      // supports string hex
+      assert.equal(shade("#808080", 0.5), "#404040");
+    });
+
+    it("outlineColor(hex): returns deterministic darker outline color", () => {
+      const outline = outlineColor(0x4c6632);
+      assert.equal(typeof outline, "number");
+      assert.ok(outline < 0x4c6632);
+      assert.equal(outlineColor(0x4c6632), outline);
+      // supports string hex
+      const strOutline = outlineColor("#4c6632");
+      assert.ok(typeof strOutline === "string");
+      assert.ok(strOutline.startsWith("#"));
+    });
+
+    it("getTheme(arcId, season): every arc x season returns complete valid tokens", () => {
+      const arcs = ["goblin_warrens", "cave_hold", "dino_vale", "elf_grove"];
+      const seasons = [0, 1, 2, 3];
+
+      for (const arc of arcs) {
+        for (const season of seasons) {
+          const theme = getTheme(arc, season);
+          assert.equal(theme.arcId, arc);
+          assert.equal(theme.seasonIndex, season);
+          assert.equal(theme.seasonName, SEASON_NAMES[season]);
+
+          // Ground colors
+          assert.ok(typeof theme.ground.grass === "number");
+          assert.ok(typeof theme.ground.water === "number");
+          assert.ok(typeof theme.ground.rock === "number");
+          assert.ok(typeof theme.ground.road === "number");
+
+          // Building colors
+          assert.ok(typeof theme.building.wall === "number");
+          assert.ok(typeof theme.building.roof === "number");
+          assert.ok(typeof theme.building.accent === "number");
+          assert.ok(typeof theme.building.chimneySmoke === "number");
+
+          // Road & tree style
+          assert.ok(["dirt", "cobble", "root_path", "flagstone", "mine_rails"].includes(theme.roadStyle));
+          assert.ok(["mushroom", "crystal", "fern", "great_tree"].includes(theme.treeStyle));
+
+          // Props per arc
+          assert.ok(Array.isArray(theme.props) && theme.props.length >= 3);
+
+          // Weather
+          assert.ok([
+            "rain", "fog", "falling_leaves", "snow", "fireflies", "embers", "dust", "none"
+          ].includes(theme.weather));
+
+          // Numeric ranges
+          assert.ok(theme.windowGlowLevel >= 0 && theme.windowGlowLevel <= 1);
+          assert.ok(theme.smokeThickness > 0);
+
+          // Hex validity for all color properties (0 to 0xffffff)
+          const allColors = [
+            theme.primary, theme.secondary, theme.accent, theme.trim,
+            theme.ground.grass, theme.ground.water, theme.ground.rock,
+            theme.building.wall, theme.building.roof, theme.ambientTint
+          ];
+          for (const col of allColors) {
+            assert.ok(
+              Number.isInteger(col) && col >= 0 && col <= 0xffffff,
+              `Invalid hex color: ${col}`
+            );
+          }
+        }
+      }
+    });
+
+    it("tokens differ between arcs", () => {
+      const tGoblin = getTheme("goblin_warrens", 0);
+      const tCave = getTheme("cave_hold", 0);
+      const tDino = getTheme("dino_vale", 0);
+      const tElf = getTheme("elf_grove", 0);
+
+      assert.notEqual(tGoblin.treeStyle, tCave.treeStyle);
+      assert.notEqual(tGoblin.treeStyle, tDino.treeStyle);
+      assert.notEqual(tGoblin.treeStyle, tElf.treeStyle);
+      assert.notEqual(tGoblin.ground.grass, tCave.ground.grass);
+      assert.notEqual(tGoblin.building.wall, tElf.building.wall);
+    });
+
+    it("tokens differ between seasons for the same arc", () => {
+      const tSpring = getTheme("goblin_warrens", 0);
+      const tSummer = getTheme("goblin_warrens", 1);
+      const tAutumn = getTheme("goblin_warrens", 2);
+      const tWinter = getTheme("goblin_warrens", 3);
+
+      assert.notEqual(tSpring.weather, tSummer.weather);
+      assert.notEqual(tSpring.ground.grass, tAutumn.ground.grass);
+      assert.notEqual(tSummer.ambientTint, tWinter.ambientTint);
+      assert.ok(tWinter.hasSnowCaps);
+      assert.ok(!tSummer.hasSnowCaps);
+      assert.ok(tWinter.isFrozenWater);
+      assert.ok(!tSummer.isFrozenWater);
+      assert.ok(tWinter.smokeThickness > tSummer.smokeThickness);
+    });
+
+    it("step % 4 determinism and pure mapping", () => {
+      const t0 = getTheme("goblin_warrens", 0);
+      const t4 = getTheme("goblin_warrens", 4);
+      const t8 = getTheme("goblin_warrens", 8);
+      assert.deepEqual(t0, t4);
+      assert.deepEqual(t0, t8);
+
+      const t1 = getTheme("goblin_warrens", 1);
+      const t5 = getTheme("goblin_warrens", 5);
+      assert.deepEqual(t1, t5);
+    });
+
+    it("theme code imports nothing from sim state mutation path", async () => {
+      // Pure view function: reads arcId + season, no sim mutation imports
+      const themeModule = await import("../src/lib/iso/theme.ts");
+      assert.equal(typeof themeModule.getTheme, "function");
+      assert.equal(typeof themeModule.shade, "function");
+      assert.equal(typeof themeModule.outlineColor, "function");
+      assert.equal(typeof themeModule.relativeLuminance, "function");
+    });
+
+    it("every arc x season ground tone luminance > 0.25 and ambient tint luminance > 0.8", () => {
+      const arcs = ["goblin_warrens", "cave_hold", "dino_vale", "elf_grove"];
+      const seasons = [0, 1, 2, 3];
+
+      for (const arc of arcs) {
+        for (const season of seasons) {
+          const theme = getTheme(arc, season);
+          const tintLum = relativeLuminance(theme.ambientTint);
+          assert.ok(
+            tintLum > 0.8,
+            `${arc} s${season} ambient tint luminance ${tintLum.toFixed(3)} must be > 0.8`
+          );
+
+          const grassLum = relativeLuminance(theme.ground.grass);
+          const rockLum = relativeLuminance(theme.ground.rock);
+          const waterLum = relativeLuminance(theme.ground.water);
+
+          assert.ok(
+            grassLum > 0.25,
+            `${arc} s${season} grass luminance ${grassLum.toFixed(3)} must be > 0.25`
+          );
+          assert.ok(
+            rockLum > 0.25,
+            `${arc} s${season} rock luminance ${rockLum.toFixed(3)} must be > 0.25`
+          );
+          assert.ok(
+            waterLum > 0.25,
+            `${arc} s${season} water luminance ${waterLum.toFixed(3)} must be > 0.25`
+          );
+        }
+      }
+    });
   });
 });

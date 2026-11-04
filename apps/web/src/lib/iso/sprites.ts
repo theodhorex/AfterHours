@@ -7,8 +7,6 @@ import { type Renderer, type Texture } from "pixi.js";
 import type { TileKind } from "./terrain.ts";
 import {
   type ArcPalette,
-  ARC_PALETTES,
-  getArcPalette,
   GroundTextureCache,
   drawTileGraphics,
 } from "./sprites-ground.ts";
@@ -23,11 +21,13 @@ import {
   drawCitizenGraphics,
   drawCartGraphics,
 } from "./sprites-props.ts";
+import { shade, outlineColor, getTheme, type ThemeTokens } from "./theme.ts";
 
-export type { ArcPalette };
+export type { ArcPalette, ThemeTokens };
 export {
-  ARC_PALETTES,
-  getArcPalette,
+  shade,
+  outlineColor,
+  getTheme,
   drawTileGraphics,
   drawHouseGraphics,
   drawSectorBuildingGraphics,
@@ -38,6 +38,7 @@ export {
 
 /**
  * Unified Texture Manager pre-rendering procedural graphics into cached textures.
+ * Caches textures per arc and season with nearest-neighbour pixel-sharp scaling.
  */
 export class IsoTextureManager {
   private groundCache: GroundTextureCache;
@@ -56,58 +57,60 @@ export class IsoTextureManager {
     kind: TileKind | "road" | "bridge",
     arcId: string,
     variant = 0,
-    roadMask = 0
+    roadMask = 0,
+    season = 0
   ): Texture {
-    return this.groundCache.getTileTexture(kind, arcId, variant, roadMask);
+    return this.groundCache.getTileTexture(kind, arcId, variant, roadMask, season);
   }
 
-  getHouseTexture(variant: number, level: number, arcId: string): Texture {
-    const pal = getArcPalette(arcId);
-    return this.buildingCache.getHouseTexture(variant, level, arcId, pal);
+  getHouseTexture(variant: number, level: number, arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
+    return this.buildingCache.getHouseTexture(variant, level, arcId, pal, season);
   }
 
   getBuildingTexture(
     sectorKind: string,
     level: number,
     ruined: boolean,
-    arcId: string
+    arcId: string,
+    season = 0
   ): Texture {
-    const pal = getArcPalette(arcId);
-    return this.buildingCache.getBuildingTexture(sectorKind, level, ruined, arcId, pal);
+    const pal = getTheme(arcId, season);
+    return this.buildingCache.getBuildingTexture(sectorKind, level, ruined, arcId, pal, season);
   }
 
-  getTreeTexture(treeType: number, arcId: string): Texture {
-    const pal = getArcPalette(arcId);
-    return this.propCache.getTreeTexture(treeType, arcId, pal);
+  getTreeTexture(treeType: number, arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
+    return this.propCache.getTreeTexture(treeType, arcId, pal, season);
   }
 
-  getCitizenTexture(arcId: string): Texture {
-    const pal = getArcPalette(arcId);
+  getCitizenTexture(arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
     return this.propCache.getCitizenTexture(arcId, pal);
   }
 
-  getCartTexture(arcId: string): Texture {
-    const pal = getArcPalette(arcId);
+  getCartTexture(arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
     return this.propCache.getCartTexture(arcId, pal);
   }
 
-  getSupportingTexture(kind: string, arcId: string): Texture {
-    const pal = getArcPalette(arcId);
+  getSupportingTexture(kind: string, arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
     return this.propCache.getSupportingTexture(kind, arcId, pal);
   }
 
-  getStallTexture(itemId: string, arcId: string): Texture {
-    const pal = getArcPalette(arcId);
+  getStallTexture(itemId: string, arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
     return this.propCache.getStallTexture(itemId, arcId, pal);
   }
 
-  getRuralTexture(kind: string, arcId: string): Texture {
-    const pal = getArcPalette(arcId);
+  getRuralTexture(kind: string, arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
     return this.propCache.getRuralTexture(kind, arcId, pal);
   }
 
-  getFountainTexture(arcId: string): Texture {
-    const pal = getArcPalette(arcId);
+  getFountainTexture(arcId: string, season = 0): Texture {
+    const pal = getTheme(arcId, season);
     return this.propCache.getFountainTexture(arcId, pal);
   }
 

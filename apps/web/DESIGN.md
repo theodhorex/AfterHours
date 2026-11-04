@@ -67,32 +67,46 @@ It is decidedly **NOT** a blueprint (Scrip's identity), **NOT** a generic dark-m
 ---
 
 ## 7. Isometric City View (Procedural Living World)
-- **Visual Style**: Top-down angled 2:1 isometric grid (64x32px tiles), wide 16:10 hero framing (min 420px height, responsive 360px floor), inspired by TheoTown-style procedural simulation aesthetics without copying any proprietary game art.
-- **Arc Palette Themes**:
-  - `goblin_warrens`: Mossy vibrant green ground (`#4c6632`, 3 shade variants), damp grey stone (`#55585e`), amber lantern light (`#f59e0b`), deep slate water (`#265f7c`) with cyan foam shores (`#64b4d6`).
-  - `cave_hold`: Warm tans and ochre ground (`#8a6842`, 3 shade variants), clay and bone stone (`#69594d`), warm gold hearth accents (`#e5b358`), subterranean river (`#25566c`).
-  - `dino_vale`: Lush swamp greens (`#387d2f`, 3 shade variants), rich teal water (`#1b7d75`) with foam trim (`#42cfc2`), amber and orange accents (`#eb8828` / `#f39c12`), ancient flagstone roads.
-  - `elf_grove`: Fresh light greens (`#4f9c52`, 3 shade variants), silver quartz stone (`#6a7880`), silver leaf and moon-blue water (`#2b78ad`), pale arched wood.
+- **Visual Style & Pixel-Sharp Pipeline**:
+  - Top-down angled 2:1 isometric grid (64x32px tiles), wide 16:10 hero framing (min 420px height, responsive 360px floor).
+  - **Pixel Art Discipline**: Crisp nearest-neighbour scaling (`scaleMode: "nearest"` on all cached textures, `antialias: false`, `roundPixels: true` on sprites).
+  - Stage zooms in integer-friendly 0.25 steps (`clampZoom` snaps to multiples of 0.25 from 0.5x to 3.0x).
+  - **1px Dark Outlines**: Buildings, trees, and props feature a 1px darker outline calculated via `outlineColor(hex) = shade(hex, 0.42)`.
+  - **Flat Shading (3-4 Tone Steps)**: No blurry or radial gradients. Faces use flat isometric tone steps: top/roof light (`shade(base, 1.25)`), left wall mid (`shade(base, 1.0)`), right wall dark (`shade(base, 0.72)`), and trim/shadow darkest (`outlineColor(base)`).
+- **Theme Tokens & Arc Identity (`src/lib/iso/theme.ts`)**:
+  - `goblin_warrens`: Purple-moss ground (`#4c3358`), torch-yellow lantern light (`#f59e0b`), giant mushrooms as trees (`treeStyle: "mushroom"`), mushroom-cap cottages and stilted cave huts with lit round windows, purple chimney smoke (`#8b5cf6`), tangled root paths.
+  - `cave_hold`: Slate-blue bedrock (`#3b4c5e`), lava orange hearth accents (`#ea580c`), glowing crystal clusters (`treeStyle: "crystal"`), mine rails with iron tracks and timber sleepers, forge sparks.
+  - `dino_vale`: Sand dunes (`#9e9067`), dense fern green (`#2d6836`), red earth clay (`#8c3b2b`), giant prehistoric cycad tree-ferns (`treeStyle: "fern"`), bones, dinosaur eggs, footprints, packed dirt tracks.
+  - `elf_grove`: Emerald moss (`#1b5e3a`), gold and violet accents (`#8e44ad` / `#e5b358`), ancient great trees with spreading arching canopies (`treeStyle: "great_tree"`), root bridges, fireflies, silver leaf glow.
+- **Season Rule (View Only)**:
+  - Season is purely visual and calculated strictly from simulation step: `season = step % 4` (0: Spring, 1: Summer, 2: Autumn, 3: Winter; 1 step = 1 season). It never modifies simulation state or state roots.
+  - **Spring (0)**: Fresh blooming tones, vibrant flower tufts, spring mist/fireflies, ambient tint `#fff7e6`.
+  - **Summer (1)**: Deeply saturated rich colors, bright sun ambient tint `#fff2d6`, lower window glow during daylight.
+  - **Autumn (2)**: Amber/rust foliage shift, falling leaves weather particles, warm hearth glow, ambient tint `#ffe4cc`.
+  - **Winter (3)**: Snow caps on roofs (`hasSnowCaps: true`), frost-dusted terrain, frozen pale water (`isFrozenWater: true`), thicker chimney smoke (2.0x), bright torchlit windows, cool blue ambient tint `#dce8f5`. Caves shift cavern mist, steam, and forge embers.
+- **How to Add a New Arc Theme**:
+  1. Add arc config to `ARC_CONFIGS` in `src/lib/iso/theme.ts` specifying `roadStyle`, `treeStyle`, `props`, base hex colors, and window/smoke colors.
+  2. Map arc's 4 seasonal weather types in `WEATHER_BY_ARC_SEASON` (`"rain" | "fog" | "falling_leaves" | "snow" | "fireflies" | "embers" | "dust" | "none"`).
+  3. If unique tree or house shapes are needed, hook into `drawTreeGraphics` in `sprites-props.ts` or `drawHouseGraphics` in `sprites-buildings.ts`.
 - **Terrain & Ground Detail**:
   - Ground tiles feature 3 deterministic coordinate-hash shade variants, wildflower/grass tuft micro-props, sand shorelines along water edges, and road tiles with distinct curb edge lines and corner/T-junction connectivity.
-  - Three distinct procedural tree types (conifer, broadleaf, slender fantasy birch) with soft drop shadow ellipses.
 - **Architectural Character & Landmarks**:
   - Residential houses: 4 deterministic arc-specific architectural variants with warm lit windows and progressive stage-level expansions (wings, upper floors, dormers).
   - Unmistakable Sector Landmarks:
-    - `food` (Farm): Red/timber gambrel barn, tall grain silo, crop furrow rows, and spinning windmill.
+    - `food` (Farm): Gambrel barn, tall grain silo, crop furrow rows, and spinning windmill.
     - `ore` (Mine): Heavy timber A-frame headframe portal, ore cart on iron rails, and mineral rock mounds.
     - `forge` (Smithy): Heavy stone smithy with huge industrial chimney stack and blazing furnace mouth.
     - `alchemy` (Lab): Cylindrical stone tower with bubbling translucent glass observation dome and copper pipes.
     - `harbor` (Port): Broad wooden pier wharf, moored cargo boat hull with mast, and timber crane derrick.
     - `tower` (Citadel): Tall tapering municipal spire with battlements, waving pennant, and glowing arcane apex beacon.
   - Ruined variants: Distinct collapsed silhouette with jagged broken roofs, leaning splintered timbers, no window light, and red structural distress marks.
-- **Living City Motion Rules**:
-  - Ambient life animations include chimney smoke rising from active workshops and houses, gentle swaying treetops, water shimmer, and walking citizens and merchant carts traversing the road network.
-  - Traffic counts scale with population and active businesses, capped strictly at 40 mobile actors for predictable load.
-  - Motion is strictly governed by `prefers-reduced-motion`: When active, the ticker completely stops and all objects remain static.
+- **Living City Motion Rules & Weather Particles**:
+  - Ambient life animations include chimney smoke rising from active workshops and houses (purple smoke for goblins, winter thickness scaling), gentle swaying treetops, water shimmer, and walking citizens and merchant carts.
+  - Weather particles: Low-count pooled particle layer strictly capped at <= 80 particles in `IsoWeatherManager` (rain streaks, snow flakes, tumbling autumn leaves, floating fireflies, rising forge embers, or spore fog). Zero per-frame allocations.
+  - Motion is strictly governed by `prefers-reduced-motion`: When active, the ticker completely stops, weather particles hide, and all objects remain static.
 - **Performance Discipline (60 FPS Target)**:
-  - Procedural sprites are generated once into reusable textures via `IsoTextureManager` (cached by kind, arc, variant, and connection mask).
-  - Pre-allocated sprite pools for actors and particle effects; strictly zero object allocation or graphics recreation per animation frame.
+  - Procedural sprites are generated once into reusable textures via `IsoTextureManager` (cached by kind, arc, season, variant, and connection mask with nearest-neighbour scaling).
+  - Pre-allocated sprite pools for actors, weather particles, and smoke; strictly zero object allocation or graphics recreation per animation frame.
 - **Accessibility & Contrast**:
   - Canvas carry `role="img"` with live descriptive `aria-label` detailing settlement name, year, population, open shops, and ruined counts.
   - Full keyboard parity via tab-navigable municipal district button list with 2px gold focus rings.

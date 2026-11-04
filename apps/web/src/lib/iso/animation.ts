@@ -202,7 +202,11 @@ export class IsoAnimationManager {
     water: Sprite[],
     arcId: string,
     glowOrigins: Array<{ x: number; y: number }> = [],
-    bobSprites: Sprite[] = []
+    bobSprites: Sprite[] = [],
+    smokeColor = 0xbda88e,
+    smokeThickness = 1.0,
+    glowColor = 0xf59e0b,
+    glowLevel = 1.0
   ): void {
     this.clear();
     this.trees = trees;
@@ -211,20 +215,21 @@ export class IsoAnimationManager {
 
     // Lit-window glows (static pooled circles; only alpha changes per frame)
     for (const o of glowOrigins) {
-      const g = new Graphics().circle(0, 0, 4).fill({ color: 0xf5b041, alpha: 0.35 });
+      const g = new Graphics().circle(0, 0, 4).fill({ color: glowColor, alpha: 0.35 * glowLevel });
       g.position.set(o.x, o.y);
       g.alpha = 0;
       this.effectsLayer.addChild(g);
       this.glows.push(g);
     }
 
-    // 1. Pre-allocate and pool actor sprites
+    // 1. Pre-allocate and pool actor sprites with roundPixels
     for (const def of actors) {
       const tex = def.isCart
         ? this.textureManager.getCartTexture(arcId)
         : this.textureManager.getCitizenTexture(arcId);
       const spr = new Sprite(tex);
       spr.anchor.set(0.5, 0.85);
+      spr.roundPixels = true;
       this.actorsLayer.addChild(spr);
       this.actorSprites.push({ spr, def });
     }
@@ -232,7 +237,8 @@ export class IsoAnimationManager {
     // 2. Pre-allocate and pool smoke particles for workshops & chimneys
     for (const origin of smokeOrigins) {
       for (let i = 0; i < 2; i++) {
-        const g = new Graphics().circle(0, 0, 2).fill({ color: 0xbda88e, alpha: 0.5 });
+        const radius = Math.max(1.5, 2 * smokeThickness);
+        const g = new Graphics().circle(0, 0, radius).fill({ color: smokeColor, alpha: 0.5 });
         g.position.set(origin.x, origin.y);
         this.effectsLayer.addChild(g);
         this.smokePool.push({
