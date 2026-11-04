@@ -86,17 +86,73 @@ export function buildCheckpoint(params: BuildCheckpointParams): Checkpoint {
       consumed_pop: (f?.consumed_pop ?? 0n).toString(),
       sourced: "0",
       sunk: (f?.sunk ?? 0n).toString(),
-      trade_to_players: "0",
-      trade_from_players: "0",
+      trade_to_players: (f?.trade_to_players ?? 0n).toString(),
+      trade_from_players: (f?.trade_from_players ?? 0n).toString(),
     };
+  }
+
+  let coinToPlayers = 0n;
+  let coinFromPlayers = 0n;
+  const executed_order_ids: string[] = [];
+  const deltasMap = new Map<string, { account: string; token_id: string; delta_in: bigint; delta_out: bigint }>();
+
+  const getDelta = (account: string, tokenId: string) => {
+    const key = `${account}:${tokenId}`;
+    let d = deltasMap.get(key);
+    if (!d) {
+      d = { account, token_id: tokenId, delta_in: 0n, delta_out: 0n };
+      deltasMap.set(key, d);
+    }
+    return d;
+  };
+
+  for (const e of events) {
+    if (e.event === "order_accepted") {
+      if (typeof e.order_id === "string") {
+        executed_order_ids.push(e.order_id);
+      }
+      const account = e.account as string;
+      if (e.kind === "buy") {
+        const item = e.item as string;
+        const filled = BigInt((e.filled as string | bigint | number) ?? 0);
+        const totalCoin = BigInt((e.total_coin as string | bigint | number) ?? 0);
+        coinFromPlayers += totalCoin;
+        getDelta(account, item).delta_in += filled;
+        getDelta(account, "coin").delta_out += totalCoin;
+      } else if (e.kind === "sell") {
+        const item = e.item as string;
+        const filled = BigInt((e.filled as string | bigint | number) ?? 0);
+        const totalCoin = BigInt((e.total_coin as string | bigint | number) ?? 0);
+        coinToPlayers += totalCoin;
+        getDelta(account, item).delta_out += filled;
+        getDelta(account, "coin").delta_in += totalCoin;
+      } else if (e.kind === "invest") {
+        const totalCoin = BigInt((e.total_coin ?? (e.amount as string | bigint | number)) ?? 0);
+        coinFromPlayers += totalCoin;
+        getDelta(account, "coin").delta_out += totalCoin;
+      }
+    }
   }
 
   const coin: CoinFlow = {
     sourced: "0",
     sunk: "0",
-    trade_to_players: "0",
-    trade_from_players: "0",
+    trade_to_players: coinToPlayers.toString(),
+    trade_from_players: coinFromPlayers.toString(),
   };
+
+  const player_deltas: PlayerDelta[] = Array.from(deltasMap.values())
+    .filter((d) => d.delta_in > 0n || d.delta_out > 0n)
+    .sort((a, b) => {
+      if (a.account !== b.account) return a.account < b.account ? -1 : 1;
+      return a.token_id < b.token_id ? -1 : a.token_id > b.token_id ? 1 : 0;
+    })
+    .map((d) => ({
+      account: d.account,
+      token_id: d.token_id,
+      delta_in: d.delta_in.toString(),
+      delta_out: d.delta_out.toString(),
+    }));
 
   return {
     city_id: next.city_id,
@@ -107,8 +163,8 @@ export function buildCheckpoint(params: BuildCheckpointParams): Checkpoint {
     stage: next.stage,
     items,
     coin,
-    player_deltas: [],
-    executed_order_ids: [],
+    player_deltas,
+    executed_order_ids,
   };
 }
 
@@ -239,4 +295,62 @@ export function checkConservation(
   const newTotalCoin = coinAdditions - coinDeductions;
 
   return { items: newTotalsItems, coin: newTotalCoin };
+}
+
+/**
+ * Pure assertion helper verifying player deltas sum consistency with item/coin trade flows.
+ * Mirrors smart contract checks in contracts/afterhours/src/checkpoint.rs (lines 276-328).
+ * Throws Error on any mismatch, returns true on success.
+ */
+export function checkPlayerDeltas(cp: Checkpoint): boolean {
+  if (cp.player_deltas.length > 256) {
+    throw new Error("TOO_MANY_PLAYER_DELTAS");
+  }
+
+  const deltaSums = new Map<string, { delta_in: bigint; delta_out: bigint }>();
+  const seenPairs = new Set<string>();
+
+  for (const pd of cp.player_deltas) {
+    const pairKey = `${pd.account}:${pd.token_id}`;
+    if (seenPairs.has(pairKey)) {
+      throw new Error(`DUPLICATE_PLAYER_DELTA_KEY: ${pairKey}`);
+    }
+    seenPairs.add(pairKey);
+
+    const din = BigInt(pd.delta_in);
+    const dout = BigInt(pd.delta_out);
+    const entry = deltaSums.get(pd.token_id) ?? { delta_in: 0n, delta_out: 0n };
+    entry.delta_in += din;
+    entry.delta_out += dout;
+    deltaSums.set(pd.token_id, entry);
+  }
+
+  for (const [itemId, flow] of Object.entries(cp.items)) {
+    const entry = deltaSums.get(itemId) ?? { delta_in: 0n, delta_out: 0n };
+    const expectedIn = BigInt(flow.trade_to_players);
+    const expectedOut = BigInt(flow.trade_from_players);
+    if (entry.delta_in !== expectedIn || entry.delta_out !== expectedOut) {
+      throw new Error(
+        `PLAYER_DELTA_MISMATCH: item ${itemId} (in: ${entry.delta_in} vs ${expectedIn}, out: ${entry.delta_out} vs ${expectedOut})`
+      );
+    }
+    deltaSums.delete(itemId);
+  }
+
+  const coinEntry = deltaSums.get("coin") ?? { delta_in: 0n, delta_out: 0n };
+  const expectedCoinIn = BigInt(cp.coin.trade_to_players);
+  const expectedCoinOut = BigInt(cp.coin.trade_from_players);
+  if (coinEntry.delta_in !== expectedCoinIn || coinEntry.delta_out !== expectedCoinOut) {
+    throw new Error(
+      `PLAYER_DELTA_MISMATCH: coin (in: ${coinEntry.delta_in} vs ${expectedCoinIn}, out: ${coinEntry.delta_out} vs ${expectedCoinOut})`
+    );
+  }
+  deltaSums.delete("coin");
+
+  if (deltaSums.size > 0) {
+    const stray = Array.from(deltaSums.keys()).join(", ");
+    throw new Error(`PLAYER_DELTA_MISMATCH: stray tokens: ${stray}`);
+  }
+
+  return true;
 }

@@ -14,6 +14,7 @@ import {
   processStageUp,
 } from "./growth.ts";
 import { processEventsPhase, applyRecipeOutputEffects } from "./events.ts";
+import { processOrdersPhase, type PlayerOrder } from "./orders.ts";
 import type { ArcFile, ArcRecipe, Business, CityState, SectorState, SimEvent } from "./types.ts";
 import type { PricingRules } from "./pricing.ts";
 import type { GrowthRules } from "./growth.ts";
@@ -22,6 +23,8 @@ export interface StepContext {
   arc: ArcFile;
   pricing: PricingRules;
   growth: GrowthRules;
+  orders?: PlayerOrder[];
+  executedIds?: Set<string>;
 }
 
 export interface StepResult {
@@ -124,7 +127,7 @@ function cloneState(state: CityState): CityState {
 /**
  * Executes a single simulation step. Pure function: does not mutate input state.
  */
-export function step(state: CityState, ctx: StepContext): StepResult {
+export function step(state: CityState, ctx: StepContext, ordersArg?: PlayerOrder[]): StepResult {
   const nextState = cloneState(state);
   const nextStep = nextState.step;
   const events: SimEvent[] = [{ event: "step_start", city_id: nextState.city_id, step: nextStep }];
@@ -135,6 +138,10 @@ export function step(state: CityState, ctx: StepContext): StepResult {
   // 1. Events Phase
   const activeEvents = processEventsPhase(nextState, ctx.arc, ctx.growth, events);
 
+  // 2. Orders Phase (executed after events, before production)
+  const orders = ordersArg ?? ctx.orders ?? [];
+  processOrdersPhase(nextState, ctx.arc, orders, ctx.executedIds, events);
+
   // Flatten businesses in fixed order: sector idx asc, business id asc
   const allBusinesses: Business[] = [];
   for (const sec of nextState.sectors) {
@@ -142,7 +149,7 @@ export function step(state: CityState, ctx: StepContext): StepResult {
     allBusinesses.push(...sorted);
   }
 
-  // 1. Production Phase
+  // 3. Production Phase
   const productionRunsMap = new Map<string, bigint>();
   for (const b of allBusinesses) {
     if (!b.open) continue;
@@ -412,6 +419,21 @@ export function step(state: CityState, ctx: StepContext): StepResult {
       (flows[itemDef.id]?.trade_to_players ?? 0n);
     nextState.totals.items[itemDef.id] = (state.totals.items[itemDef.id] ?? 0n) + netFlow;
   }
+
+  let coinTradeFromPlayers = 0n;
+  let coinTradeToPlayers = 0n;
+  for (const e of events) {
+    if (e.event === "order_accepted") {
+      if (e.kind === "buy") {
+        coinTradeFromPlayers += BigInt((e.total_coin as string | bigint | number) ?? 0);
+      } else if (e.kind === "sell") {
+        coinTradeToPlayers += BigInt((e.total_coin as string | bigint | number) ?? 0);
+      } else if (e.kind === "invest") {
+        coinTradeFromPlayers += BigInt((e.total_coin ?? e.amount as string | bigint | number) ?? 0);
+      }
+    }
+  }
+  nextState.totals.coin = state.totals.coin + coinTradeFromPlayers - coinTradeToPlayers;
 
   // 7. City Root & Step End
   const cRoot = cityRoot(nextState);
