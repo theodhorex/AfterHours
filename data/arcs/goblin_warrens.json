@@ -134,10 +134,10 @@
   },
   "stages": [
     { "id": "hamlet", "min_population": 0, "max_businesses_per_sector": 4 },
-    { "id": "village", "min_population": 400, "max_businesses_per_sector": 5 },
-    { "id": "town", "min_population": 900, "max_businesses_per_sector": 6 },
-    { "id": "city", "min_population": 2000, "max_businesses_per_sector": 7 },
-    { "id": "grand_city", "min_population": 4500, "max_businesses_per_sector": 8 }
+    { "id": "village", "min_population": 150, "max_businesses_per_sector": 5 },
+    { "id": "town", "min_population": 250, "max_businesses_per_sector": 6 },
+    { "id": "city", "min_population": 420, "max_businesses_per_sector": 7 },
+    { "id": "grand_city", "min_population": 700, "max_businesses_per_sector": 8 }
   ],
   "events": [
     {
