@@ -213,7 +213,8 @@ export function processEntrepreneurEntry(
   let bestMargin: bigint | null = null;
 
   for (const recipe of arc.recipes) {
-    const sectorCount = BigInt(nextState.sectors[recipe.sector].businesses.length);
+    // Closed businesses are ruins and do not use a slot, so the city can rebuild.
+    const sectorCount = BigInt(nextState.sectors[recipe.sector].businesses.filter((b) => b.open).length);
     if (sectorCount >= maxPerSector) {
       continue;
     }

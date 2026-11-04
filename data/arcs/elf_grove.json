@@ -133,11 +133,11 @@
     ]
   },
   "stages": [
-    { "id": "glade_camp", "min_population": 0, "max_businesses_per_sector": 2 },
-    { "id": "sylvan_haven", "min_population": 400, "max_businesses_per_sector": 3 },
-    { "id": "canopy_town", "min_population": 900, "max_businesses_per_sector": 4 },
-    { "id": "star_sanctuary", "min_population": 2000, "max_businesses_per_sector": 5 },
-    { "id": "high_grove", "min_population": 4500, "max_businesses_per_sector": 6 }
+    { "id": "glade_camp", "min_population": 0, "max_businesses_per_sector": 4 },
+    { "id": "sylvan_haven", "min_population": 400, "max_businesses_per_sector": 5 },
+    { "id": "canopy_town", "min_population": 900, "max_businesses_per_sector": 6 },
+    { "id": "star_sanctuary", "min_population": 2000, "max_businesses_per_sector": 7 },
+    { "id": "high_grove", "min_population": 4500, "max_businesses_per_sector": 8 }
   ],
   "events": [
     {

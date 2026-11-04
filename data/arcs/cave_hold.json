@@ -133,11 +133,11 @@
     ]
   },
   "stages": [
-    { "id": "camp", "min_population": 0, "max_businesses_per_sector": 2 },
-    { "id": "clan_hold", "min_population": 450, "max_businesses_per_sector": 3 },
-    { "id": "stronghold", "min_population": 1000, "max_businesses_per_sector": 4 },
-    { "id": "citadel", "min_population": 2200, "max_businesses_per_sector": 5 },
-    { "id": "high_hold", "min_population": 5000, "max_businesses_per_sector": 6 }
+    { "id": "camp", "min_population": 0, "max_businesses_per_sector": 4 },
+    { "id": "clan_hold", "min_population": 450, "max_businesses_per_sector": 5 },
+    { "id": "stronghold", "min_population": 1000, "max_businesses_per_sector": 6 },
+    { "id": "citadel", "min_population": 2200, "max_businesses_per_sector": 7 },
+    { "id": "high_hold", "min_population": 5000, "max_businesses_per_sector": 8 }
   ],
   "events": [
     {

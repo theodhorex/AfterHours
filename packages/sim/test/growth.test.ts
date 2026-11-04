@@ -99,6 +99,8 @@ test("parseGrowthRules throws on invalid variants (2 per field class)", () => {
 
 test("closure: a business forced idle closes after exactly idle_close_steps steps", () => {
   const s0 = genesis(goblinArc, "city-test-closure", "seed-c1");
+  // Isolate closure: no entrepreneur may rebuild the closed farm during this test.
+  const noEntry = { ...growth, entry_price_premium_bps: 1000000000n };
   // Find a business that needs input, e.g. mill (needs grain)
   // Ensure there is no grain in the entire city so mill can never produce or buy
   for (const sec of s0.sectors) {
@@ -115,7 +117,7 @@ test("closure: a business forced idle closes after exactly idle_close_steps step
   let curr: CityState = s0;
   const idleLimit = growth.idle_close_steps;
   for (let stepIdx = 1; stepIdx < idleLimit; stepIdx++) {
-    const res = step(curr, { arc: goblinArc, pricing, growth });
+    const res = step(curr, { arc: goblinArc, pricing, growth: noEntry });
     curr = res.state;
     const mill = curr.sectors[0].businesses.find((b) => b.recipe === "mill")!;
     assert.equal(mill.open, true, `Mill should remain open at step ${stepIdx}`);
@@ -127,7 +129,7 @@ test("closure: a business forced idle closes after exactly idle_close_steps step
   }
 
   // The mill reaches idle_close_steps insolvent steps and closes
-  const res8 = step(curr, { arc: goblinArc, pricing, growth });
+  const res8 = step(curr, { arc: goblinArc, pricing, growth: noEntry });
   curr = res8.state;
   const mill = curr.sectors[0].businesses.find((b) => b.recipe === "mill")!;
   assert.equal(mill.open, false, `Mill must close at step ${idleLimit}`);
@@ -265,10 +267,10 @@ test("entry guard: stage cap blocks entry", () => {
     s0.sectors[0].businesses.push({
       id: `filler-${idx}`,
       recipe: "farm",
-      open: false,
+      open: true,
       coin: 100n,
       inventory: {},
-      insolvent_steps: 8,
+      insolvent_steps: 0,
     });
   }
 
@@ -408,3 +410,21 @@ test("stage negative: does not advance if population or satisfaction is insuffic
   assert.equal(res2.state.stage, 0, "Low population must prevent stage up");
 });
 
+
+test("entry guard: closed businesses do not use a sector slot (the city can rebuild)", () => {
+  const s0 = genesis(goblinArc, "city-test-ruins", "seed-e9");
+  s0.stage = 0;
+  s0.citizens.purse = 50000n;
+  s0.market.demand_ema["grain"] = 50000n;
+  for (const sec of s0.sectors) for (const b of sec.businesses) b.coin = 0n;
+  const maxBiz = Number(goblinArc.stages[0].max_businesses_per_sector);
+  // Sector 0 is at the cap, but with every business closed no slot is used.
+  while (s0.sectors[0].businesses.length < maxBiz) {
+    const idx = s0.sectors[0].businesses.length;
+    s0.sectors[0].businesses.push({ id: `ruin-${idx}`, recipe: "farm", open: false, coin: 0n, inventory: {}, insolvent_steps: 99 });
+  }
+  for (const b of s0.sectors[0].businesses) b.open = false;
+  const entryOnly = { ...growth, dividend_bps: 0n, topup_floor_bps: 0n };
+  const res = step(s0, { arc: goblinArc, pricing, growth: entryOnly });
+  assert.ok(res.events.some((e) => e.event === "business_opened" && e.sector === 0), "a ruined sector can be rebuilt");
+});

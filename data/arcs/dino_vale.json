@@ -133,11 +133,11 @@
     ]
   },
   "stages": [
-    { "id": "nesting_camp", "min_population": 0, "max_businesses_per_sector": 2 },
-    { "id": "herders_enclosure", "min_population": 420, "max_businesses_per_sector": 3 },
-    { "id": "quarry_town", "min_population": 950, "max_businesses_per_sector": 4 },
-    { "id": "saurian_city", "min_population": 2100, "max_businesses_per_sector": 5 },
-    { "id": "apex_vale", "min_population": 4800, "max_businesses_per_sector": 6 }
+    { "id": "nesting_camp", "min_population": 0, "max_businesses_per_sector": 4 },
+    { "id": "herders_enclosure", "min_population": 420, "max_businesses_per_sector": 5 },
+    { "id": "quarry_town", "min_population": 950, "max_businesses_per_sector": 6 },
+    { "id": "saurian_city", "min_population": 2100, "max_businesses_per_sector": 7 },
+    { "id": "apex_vale", "min_population": 4800, "max_businesses_per_sector": 8 }
   ],
   "events": [
     {
