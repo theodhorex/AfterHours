@@ -1,0 +1,16 @@
+node_modules/
+target/
+.next/
+.env*
+priv_key*
+*.key
+*.pem
+.agy/
+*.wasm
+.recovery*
+.throwaway-keys*
+.near-credentials/
+*.db
+*.log
+.DS_Store
+data/snapshots/

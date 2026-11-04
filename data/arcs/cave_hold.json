@@ -1,0 +1,69 @@
+{
+  "id": "cave_hold",
+  "name": "Cave Hold",
+  "server": "eldmark",
+  "version": 0,
+  "items": [
+    { "id": "grain", "base_price": 9, "tier": "staple" },
+    { "id": "flour", "base_price": 15, "tier": "staple" },
+    { "id": "bread", "base_price": 13, "tier": "staple" },
+    { "id": "fish", "base_price": 10, "tier": "staple" },
+    { "id": "ore", "base_price": 12, "tier": "raw" },
+    { "id": "ingot", "base_price": 24, "tier": "refined" },
+    { "id": "tool", "base_price": 48, "tier": "luxury" },
+    { "id": "crystal", "base_price": 28, "tier": "raw" },
+    { "id": "elixir", "base_price": 68, "tier": "luxury" },
+    { "id": "scroll", "base_price": 62, "tier": "luxury" },
+    { "id": "hide", "base_price": 12, "tier": "raw" },
+    { "id": "totem", "base_price": 85, "tier": "luxury" }
+  ],
+  "sectors": [
+    { "idx": 0, "kind": "food", "name": "Gathering Grounds" },
+    { "idx": 1, "kind": "ore", "name": "Flint Quarries" },
+    { "idx": 2, "kind": "forge", "name": "Fire Pits" },
+    { "idx": 3, "kind": "alchemy", "name": "Herb Dens" },
+    { "idx": 4, "kind": "harbor", "name": "River Landing" },
+    { "idx": 5, "kind": "tower", "name": "Elder Caves" }
+  ],
+  "recipes": [
+    { "id": "farm", "sector": 0, "inputs": {}, "outputs": { "grain": 3 }, "wage": 4, "max_per_run_per_business": 40 },
+    { "id": "mill", "sector": 0, "inputs": { "grain": 2 }, "outputs": { "flour": 1 }, "wage": 3, "max_per_run_per_business": 40 },
+    { "id": "bakery", "sector": 0, "inputs": { "flour": 1 }, "outputs": { "bread": 2 }, "wage": 3, "max_per_run_per_business": 40 },
+    { "id": "mine", "sector": 1, "inputs": {}, "outputs": { "ore": 3 }, "wage": 5, "max_per_run_per_business": 30 },
+    { "id": "crystal_mine", "sector": 1, "inputs": {}, "outputs": { "crystal": 1 }, "wage": 8, "max_per_run_per_business": 12 },
+    { "id": "smelter", "sector": 2, "inputs": { "ore": 2 }, "outputs": { "ingot": 1 }, "wage": 4, "max_per_run_per_business": 25 },
+    { "id": "smith", "sector": 2, "inputs": { "ingot": 1, "hide": 1 }, "outputs": { "tool": 1 }, "wage": 6, "max_per_run_per_business": 12 },
+    { "id": "hunter", "sector": 4, "inputs": {}, "outputs": { "hide": 2 }, "wage": 3, "max_per_run_per_business": 25 },
+    { "id": "alchemist", "sector": 3, "inputs": { "crystal": 1, "grain": 1 }, "outputs": { "elixir": 1 }, "wage": 8, "max_per_run_per_business": 10 },
+    { "id": "carver", "sector": 5, "inputs": { "hide": 1, "crystal": 1 }, "outputs": { "totem": 1 }, "wage": 9, "max_per_run_per_business": 6 },
+    { "id": "fisher", "sector": 4, "inputs": {}, "outputs": { "fish": 2 }, "wage": 3, "max_per_run_per_business": 30 },
+    { "id": "scribe", "sector": 5, "inputs": { "crystal": 1 }, "outputs": { "scroll": 1 }, "wage": 7, "max_per_run_per_business": 8 }
+  ],
+  "citizens": {
+    "start_population": 220,
+    "needs": [
+      { "item": "bread", "per_capita_milli": 900, "alt": ["fish"], "satisfaction_weight": 6000 },
+      { "item": "tool", "per_capita_milli": 25, "alt": [], "satisfaction_weight": 1500 },
+      { "item": "elixir", "per_capita_milli": 8, "alt": [], "satisfaction_weight": 1500 },
+      { "item": "totem", "per_capita_milli": 5, "alt": [], "satisfaction_weight": 1000 }
+    ]
+  },
+  "stages": [
+    { "id": "camp", "min_population": 0, "max_businesses_per_sector": 2 },
+    { "id": "clan_hold", "min_population": 450, "max_businesses_per_sector": 3 },
+    { "id": "stronghold", "min_population": 1000, "max_businesses_per_sector": 4 },
+    { "id": "citadel", "min_population": 2200, "max_businesses_per_sector": 5 },
+    { "id": "high_hold", "min_population": 5000, "max_businesses_per_sector": 6 }
+  ],
+  "events": [
+    { "id": "cold_winter", "weight": 3, "duration_steps": 3, "effects": [{ "kind": "recipe_output_bps", "recipe": "farm", "bps": 6000 }] },
+    { "id": "rockfall", "weight": 2, "duration_steps": 2, "effects": [{ "kind": "recipe_output_bps", "recipe": "mine", "bps": 5000 }] },
+    { "id": "great_hunt", "weight": 3, "duration_steps": 2, "effects": [{ "kind": "recipe_output_bps", "recipe": "hunter", "bps": 16000 }] },
+    { "id": "plague", "weight": 2, "duration_steps": 3, "effects": [{ "kind": "population_bps", "bps": -500 }] }
+  ],
+  "genesis": {
+    "coin_per_business": 300,
+    "coin_citizens": 2200,
+    "starting_businesses": { "farm": 1, "mill": 1, "bakery": 1, "mine": 1, "smelter": 1, "hunter": 1, "fisher": 1, "crystal_mine": 1, "alchemist": 1, "scribe": 1, "smith": 1, "carver": 1 }
+  }
+}

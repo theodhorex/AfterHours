@@ -1,0 +1,11 @@
+{
+  "name": "afterhours",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "AfterHours: a verifiable fantasy economy on NEAR",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test packages/sim/test/"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "id": "goblin_warrens",
+  "name": "Goblin Warrens",
+  "server": "eldmark",
+  "version": 0,
+  "items": [
+    { "id": "grain", "base_price": 8, "tier": "staple" },
+    { "id": "flour", "base_price": 14, "tier": "staple" },
+    { "id": "bread", "base_price": 12, "tier": "staple" },
+    { "id": "fish", "base_price": 11, "tier": "staple" },
+    { "id": "ore", "base_price": 10, "tier": "raw" },
+    { "id": "ingot", "base_price": 22, "tier": "refined" },
+    { "id": "tool", "base_price": 45, "tier": "luxury" },
+    { "id": "crystal", "base_price": 30, "tier": "raw" },
+    { "id": "elixir", "base_price": 70, "tier": "luxury" },
+    { "id": "scroll", "base_price": 60, "tier": "luxury" },
+    { "id": "scrap", "base_price": 6, "tier": "raw" },
+    { "id": "gadget", "base_price": 90, "tier": "luxury" }
+  ],
+  "sectors": [
+    { "idx": 0, "kind": "food", "name": "Mushroom Farms" },
+    { "idx": 1, "kind": "ore", "name": "Deep Mines" },
+    { "idx": 2, "kind": "forge", "name": "Scrap Forges" },
+    { "idx": 3, "kind": "alchemy", "name": "Bubbling Vats" },
+    { "idx": 4, "kind": "harbor", "name": "Sump Docks" },
+    { "idx": 5, "kind": "tower", "name": "Shaman Towers" }
+  ],
+  "recipes": [
+    { "id": "farm", "sector": 0, "inputs": {}, "outputs": { "grain": 3 }, "wage": 4, "max_per_run_per_business": 40 },
+    { "id": "mill", "sector": 0, "inputs": { "grain": 2 }, "outputs": { "flour": 1 }, "wage": 3, "max_per_run_per_business": 40 },
+    { "id": "bakery", "sector": 0, "inputs": { "flour": 1 }, "outputs": { "bread": 2 }, "wage": 3, "max_per_run_per_business": 40 },
+    { "id": "mine", "sector": 1, "inputs": {}, "outputs": { "ore": 2 }, "wage": 5, "max_per_run_per_business": 30 },
+    { "id": "crystal_mine", "sector": 1, "inputs": {}, "outputs": { "crystal": 1 }, "wage": 8, "max_per_run_per_business": 15 },
+    { "id": "smelter", "sector": 2, "inputs": { "ore": 2 }, "outputs": { "ingot": 1 }, "wage": 4, "max_per_run_per_business": 25 },
+    { "id": "smith", "sector": 2, "inputs": { "ingot": 1, "scrap": 1 }, "outputs": { "tool": 1 }, "wage": 6, "max_per_run_per_business": 12 },
+    { "id": "scrapper", "sector": 2, "inputs": {}, "outputs": { "scrap": 2 }, "wage": 2, "max_per_run_per_business": 30 },
+    { "id": "alchemist", "sector": 3, "inputs": { "crystal": 1, "grain": 1 }, "outputs": { "elixir": 1 }, "wage": 8, "max_per_run_per_business": 10 },
+    { "id": "tinker", "sector": 3, "inputs": { "scrap": 2, "crystal": 1 }, "outputs": { "gadget": 1 }, "wage": 9, "max_per_run_per_business": 6 },
+    { "id": "fisher", "sector": 4, "inputs": {}, "outputs": { "fish": 2 }, "wage": 3, "max_per_run_per_business": 30 },
+    { "id": "scribe", "sector": 5, "inputs": { "crystal": 1 }, "outputs": { "scroll": 1 }, "wage": 7, "max_per_run_per_business": 8 }
+  ],
+  "citizens": {
+    "start_population": 200,
+    "needs": [
+      { "item": "bread", "per_capita_milli": 1000, "alt": ["fish"], "satisfaction_weight": 6000 },
+      { "item": "tool", "per_capita_milli": 20, "alt": [], "satisfaction_weight": 1500 },
+      { "item": "elixir", "per_capita_milli": 10, "alt": [], "satisfaction_weight": 1500 },
+      { "item": "gadget", "per_capita_milli": 5, "alt": [], "satisfaction_weight": 1000 }
+    ]
+  },
+  "stages": [
+    { "id": "hamlet", "min_population": 0, "max_businesses_per_sector": 2 },
+    { "id": "village", "min_population": 400, "max_businesses_per_sector": 3 },
+    { "id": "town", "min_population": 900, "max_businesses_per_sector": 4 },
+    { "id": "city", "min_population": 2000, "max_businesses_per_sector": 5 },
+    { "id": "grand_city", "min_population": 4500, "max_businesses_per_sector": 6 }
+  ],
+  "events": [
+    { "id": "mana_drought", "weight": 3, "duration_steps": 4, "effects": [{ "kind": "recipe_output_bps", "recipe": "crystal_mine", "bps": 4000 }] },
+    { "id": "dragon_raid", "weight": 2, "duration_steps": 1, "effects": [{ "kind": "sink_inventory_bps", "sector": 4, "bps": 3000 }] },
+    { "id": "plague", "weight": 2, "duration_steps": 3, "effects": [{ "kind": "population_bps", "bps": -500 }] },
+    { "id": "mushroom_bloom", "weight": 3, "duration_steps": 2, "effects": [{ "kind": "recipe_output_bps", "recipe": "farm", "bps": 15000 }] }
+  ],
+  "genesis": {
+    "coin_per_business": 300,
+    "coin_citizens": 2000,
+    "starting_businesses": { "farm": 1, "mill": 1, "bakery": 1, "mine": 1, "smelter": 1, "scrapper": 1, "fisher": 1, "crystal_mine": 1, "alchemist": 1, "scribe": 1, "smith": 1, "tinker": 1 }
+  }
+}

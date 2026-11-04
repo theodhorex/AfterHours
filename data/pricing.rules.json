@@ -1,0 +1,19 @@
+{
+  "version": 0,
+  "note": "Single readable pricing rule file. All values are bps unless stated. Starting values, to be tuned.",
+  "k_stock_bps": 6000,
+  "k_dem_bps": 3000,
+  "floor_bps": 3000,
+  "cap_bps": 40000,
+  "dem_ema_alpha_bps": 2500,
+  "target_stock_steps": 2,
+  "dem_ref_floor": 1,
+  "explain": {
+    "stock_low": "Stock is {pct}% below target, so the price rises {effect}%.",
+    "stock_high": "Stock is {pct}% above target, so the price falls {effect}%.",
+    "demand_up": "Recent demand is {pct}% above normal, adding {effect}%.",
+    "demand_down": "Recent demand is {pct}% below normal, cutting {effect}%.",
+    "clamped_floor": "Price held at the floor ({floor}% of base).",
+    "clamped_cap": "Price held at the cap ({cap}% of base)."
+  }
+}
