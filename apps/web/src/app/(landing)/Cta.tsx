@@ -120,6 +120,13 @@ export function Cta({ contract }: { contract: string }) {
   const ref = useRef<HTMLElement>(null);
   const router = useRouter();
 
+  // Coming back with the browser's back button must not leave the warp overlay on screen.
+  useEffect(() => {
+    const reset = () => gsap.set(".lp-warp, .lp-portal, .lp-portal-label, .lp-cta-title, .lp-cta-sub, .lp-cta-links", { clearProps: "opacity,transform,scale" });
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+
   useEffect(() => {
     const el = ref.current;
     if (!el || noMotion()) return;
@@ -142,7 +149,7 @@ export function Cta({ contract }: { contract: string }) {
   const enter = (e: MouseEvent<HTMLAnchorElement>) => {
     if (noMotion() || e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
-    const tl = gsap.timeline({ onComplete: () => router.push("/") });
+    const tl = gsap.timeline({ onComplete: () => router.push("/atlas") });
     tl.to(".lp-portal", { scale: 24, duration: 1.05, ease: "power3.in" }, 0)
       .to(".lp-portal-label, .lp-cta-title, .lp-cta-sub, .lp-cta-links", { opacity: 0, duration: 0.35 }, 0)
       .to(".lp-warp", { opacity: 1, duration: 0.7, ease: "power2.in" }, 0.35);
