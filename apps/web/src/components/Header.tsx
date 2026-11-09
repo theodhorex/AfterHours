@@ -15,7 +15,7 @@ export function Header({ city }: HeaderProps) {
   const root = city.stateRoot ? `${city.stateRoot.slice(0, 8)}…${city.stateRoot.slice(-4)}` : "genesis";
 
   return (
-    <header className="ledger-chrome sticky top-0 z-30 border-b-2 border-ledger-brass/60">
+    <header className="ledger-chrome z-30 border-b-2 border-ledger-brass/60">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2 sm:px-6">
         <div className="flex min-w-0 items-baseline gap-3">
           <h1 className="font-pixel text-xl leading-none text-ledger-paper sm:text-2xl">AfterEarth</h1>
