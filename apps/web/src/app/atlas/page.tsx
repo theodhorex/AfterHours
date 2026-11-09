@@ -2,23 +2,26 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Header } from "../components/Header.tsx";
-import { DistrictDetail } from "../components/DistrictDetail.tsx";
-import { MarketPanel } from "../components/MarketPanel.tsx";
-import { ChronicleList } from "../components/ChronicleList.tsx";
-import { SimulationControls } from "../components/SimulationControls.tsx";
-import { AuditPanel } from "../components/AuditPanel.tsx";
-import { CaravanPanel } from "../components/CaravanPanel.tsx";
-import { AgentsPanel } from "../components/AgentsPanel.tsx";
-import { MayorCard } from "../components/MayorCard.tsx";
+import { Header } from "../../components/Header.tsx";
+import { DistrictDetail } from "../../components/DistrictDetail.tsx";
+import { MarketPanel } from "../../components/MarketPanel.tsx";
+import { ChronicleList } from "../../components/ChronicleList.tsx";
+import { SimulationControls } from "../../components/SimulationControls.tsx";
+import { AuditPanel } from "../../components/AuditPanel.tsx";
+import { CaravanPanel } from "../../components/CaravanPanel.tsx";
+import { AgentsPanel } from "../../components/AgentsPanel.tsx";
+import { MayorCard } from "../../components/MayorCard.tsx";
+import { BookTabs } from "../../components/ui/BookTabs.tsx";
+import { Icon } from "../../components/ui/Icons.tsx";
+import { sectorKindToPresetKey } from "../../lib/agents.ts";
 
 const IsoCity = dynamic(
-  () => import("../components/IsoCity.tsx").then((mod) => mod.IsoCity),
+  () => import("../../components/IsoCity.tsx").then((mod) => mod.IsoCity),
   {
     ssr: false,
     loading: () => (
       <div className="atlas-panel rounded-sm p-12 text-center text-atlas-ink-muted font-mono text-sm border border-atlas-line">
-        Surveying terrain & rendering isometric city view...
+        Drawing the map…
       </div>
     ),
   }
@@ -28,8 +31,8 @@ import {
   advanceWorld,
   AVAILABLE_ARCS,
   type WorldInstance,
-} from "../lib/sim-adapter.ts";
-import { stateToCityView, type CityView } from "../lib/sim-view.ts";
+} from "../../lib/sim-adapter.ts";
+import { stateToCityView, type CityView } from "../../lib/sim-view.ts";
 
 const DEFAULT_ARC = "goblin_warrens";
 const DEFAULT_SEED = "goblin_seed_0";
@@ -43,6 +46,15 @@ export default function CityViewPage() {
   const [isRunning, setIsRunning] = useState<boolean>(true);
   const [stepsRemaining, setStepsRemaining] = useState<number>(10000);
   const [error, setError] = useState<Error | null>(null);
+  const [bookTab, setBookTab] = useState<string>("market");
+  const [strategyPresetKey, setStrategyPresetKey] = useState<string>("flour-trader");
+  const [backtestSummary, setBacktestSummary] = useState<string | null>(null);
+
+  const handleTryStrategy = useCallback((kind: string) => {
+    const preset = sectorKindToPresetKey(kind);
+    setStrategyPresetKey(preset);
+    setBookTab("agents");
+  }, []);
 
   // Initialize world instance at genesis (step 0)
   const [world, setWorld] = useState<WorldInstance>(() =>
@@ -163,12 +175,49 @@ export default function CityViewPage() {
 
   return (
     <div className="min-h-screen bg-atlas-canvas text-atlas-ink flex flex-col">
-      {/* 1. Header with live World Clock, Stage badge, stats, and State Root */}
+      {/* HUD bar: clock, citizens, treasury, state root */}
       {cityView && <Header city={cityView} />}
 
-      {/* Main Layout Container: responsive from 360px with 16px gutter */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-5">
-        {/* Always visible Simulation Control Bar */}
+      <main className="flex-1 w-full mx-auto max-w-[1600px] px-3 py-3 sm:px-6 sm:py-5 space-y-4">
+        {/* Error Panel (fallback if sim throws) */}
+        {activeError && (
+          <div
+            role="alert"
+            className="atlas-panel rounded-sm p-4 sm:p-5 border border-atlas-alert bg-atlas-alert/10 text-atlas-ink space-y-3"
+          >
+            <div className="flex items-center gap-2 text-atlas-alert font-display font-bold text-base sm:text-lg">
+              <Icon name="alert" size={20} />
+              <h2>The simulation stopped</h2>
+            </div>
+            <p className="font-mono text-xs sm:text-sm text-atlas-ink/90 leading-relaxed bg-atlas-canvas/60 p-3 rounded-xs border border-atlas-alert/30">
+              {activeError.message || String(activeError)}
+            </p>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="atlas-focus px-3 py-1.5 rounded-xs bg-atlas-alert text-atlas-canvas font-mono font-semibold text-xs hover:bg-atlas-alert/90 transition-colors min-h-[44px] sm:min-h-fit inline-flex items-center cursor-pointer"
+            >
+              Reset the world
+            </button>
+          </div>
+        )}
+
+        {/* The map is the hero: first thing on the page, full width */}
+        {cityView && !activeError && (
+          <IsoCity
+            city={cityView}
+            selectedIdx={selectedIdx}
+            onSelectSector={(idx) => {
+              setSelectedIdx(idx);
+              setBookTab("district");
+            }}
+            seed={seed}
+            onTryStrategy={handleTryStrategy}
+            strategyResult={backtestSummary}
+          />
+        )}
+
+        {/* Time and world controls sit directly under the map */}
         <SimulationControls
           arcId={arcId}
           seed={seed}
@@ -185,67 +234,52 @@ export default function CityViewPage() {
           onReset={handleReset}
         />
 
-        {/* Error Panel (fallback if sim throws) */}
-        {activeError && (
-          <div
-            role="alert"
-            className="atlas-panel rounded-sm p-4 sm:p-5 border border-atlas-alert bg-atlas-alert/10 text-atlas-ink space-y-3"
-          >
-            <div className="flex items-center gap-2 text-atlas-alert font-display font-bold text-base sm:text-lg">
-              <span aria-hidden="true">⚠️</span>
-              <h2>Simulation Error Encountered</h2>
-            </div>
-            <p className="font-mono text-xs sm:text-sm text-atlas-ink/90 leading-relaxed bg-atlas-canvas/60 p-3 rounded-xs border border-atlas-alert/30">
-              {activeError.message || String(activeError)}
-            </p>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="atlas-focus px-3 py-1.5 rounded-xs bg-atlas-alert text-atlas-canvas font-mono font-semibold text-xs hover:bg-atlas-alert/90 transition-colors min-h-[44px] sm:min-h-fit inline-flex items-center cursor-pointer"
-            >
-              Reset & Recover Simulation
-            </button>
-          </div>
-        )}
-
-        {/* Primary Content: Wide Hero Isometric City Canvas, then District & Market Grid */}
+        {/* The ledger: one page open at a time */}
         {cityView && !activeError && (
-          <div className="space-y-6">
-            <IsoCity
-              city={cityView}
-              selectedIdx={selectedIdx}
-              onSelectSector={setSelectedIdx}
-              seed={seed}
+          <section aria-label="City ledger" className="border-2 border-ledger-twilight">
+            <BookTabs
+              value={bookTab}
+              onChange={setBookTab}
+              ariaLabel="City ledger pages"
+              tabs={[
+                { value: "market", label: "Market", icon: <Icon name="coin" size={16} /> },
+                { value: "district", label: "District", icon: <Icon name="anvil" size={16} /> },
+                { value: "chronicle", label: "Chronicle", icon: <Icon name="scroll" size={16} /> },
+                { value: "audit", label: "Audit", icon: <Icon name="seal" size={16} /> },
+                { value: "routes", label: "Trade routes", icon: <Icon name="caravan" size={16} /> },
+                { value: "agents", label: "Agents", icon: <Icon name="quill" size={16} /> },
+                { value: "mayor", label: "Mayor", icon: <Icon name="scale" size={16} /> },
+              ]}
             />
-
-            {/* Browser-side Replay Verification Audit Panel */}
-            <AuditPanel
-              arcId={arcId}
-              seed={seed}
-              cityId={world.state.city_id}
-              checkpoints={world.checkpoints}
-            />
-
-            {/* Inter-City Caravan Trade Panel */}
-            <CaravanPanel />
-
-            {/* Autonomous Agent Backtester & Verified Leaderboard */}
-            <AgentsPanel arcId={arcId} seed={seed} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: District Detail */}
-              <div className="lg:col-span-7 space-y-6">
-                {selectedSector && <DistrictDetail sector={selectedSector} />}
-              </div>
-
-              {/* Right Column: Meme Mayor, Market Panel & Chronicle List */}
-              <div className="lg:col-span-5 space-y-6">
-                <MayorCard arcId={arcId} cityYear={cityView.year} />
-                <MarketPanel items={cityView.market} />
-                <ChronicleList events={cityView.chronicle} />
-              </div>
+            <div
+              role="tabpanel"
+              id={`book-panel-${bookTab}`}
+              aria-labelledby={`book-tab-${bookTab}`}
+              className="bg-atlas-canvas p-3 sm:p-5"
+            >
+              {bookTab === "market" && <MarketPanel items={cityView.market} />}
+              {bookTab === "district" && selectedSector && <DistrictDetail sector={selectedSector} />}
+              {bookTab === "chronicle" && <ChronicleList events={cityView.chronicle} />}
+              {bookTab === "audit" && (
+                <AuditPanel
+                  arcId={arcId}
+                  seed={seed}
+                  cityId={world.state.city_id}
+                  checkpoints={world.checkpoints}
+                />
+              )}
+              {bookTab === "routes" && <CaravanPanel />}
+              {bookTab === "agents" && (
+                <AgentsPanel
+                  arcId={arcId}
+                  seed={seed}
+                  initialPresetKey={strategyPresetKey}
+                  onBacktestComplete={({ summary }) => setBacktestSummary(summary)}
+                />
+              )}
+              {bookTab === "mayor" && <MayorCard arcId={arcId} cityYear={cityView.year} />}
             </div>
-          </div>
+          </section>
         )}
       </main>
 
