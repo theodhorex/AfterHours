@@ -196,7 +196,7 @@ export class IsoWeatherSystem {
         break;
 
       case "fog":
-        p.g.ellipse(0, 0, 48, 16).fill({ color: 0xcfd8dc, alpha: 0.14 });
+        p.g.ellipse(0, 0, 34, 10).fill({ color: 0xcfd8dc, alpha: 0.12 });
         p.vx = 0.35;
         p.vy = 0.04;
         p.baseAlpha = 0.14;
@@ -248,6 +248,7 @@ export class IsoWeatherSystem {
     }
 
     const { fadeOutAlpha, fadeInAlpha } = computeCrossFadeAlpha(this.crossFadeTimer, CROSSFADE_DURATION_SEC);
+    if (viewBounds) this.defaultBounds = viewBounds; // spawn inside the visible area
     const bounds = viewBounds ?? this.defaultBounds;
 
     for (const p of this.particles) {

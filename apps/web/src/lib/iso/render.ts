@@ -241,7 +241,6 @@ export class IsoCityScene {
       this.effectsLayer,
       this.lightSystem.layer,
       this.bubbleManager.layer,
-      this.weatherSystem.layer,
       this.overlayLayer,
       this.uiLayer
     );
@@ -673,7 +672,13 @@ export class IsoCityScene {
         }
       }
       this.lightSystem.update(dt, this.root, baseAmbient, undefined, !isReduced);
-      this.weatherSystem.update(dt, this.lightSystem.timeT, undefined, !isReduced);
+      // Weather lives in screen space (a sibling of the zoomed world) so drops and fog keep
+      // a constant size and always fill the viewport instead of the whole map.
+      const wl = this.weatherSystem.layer;
+      if (wl.parent !== this.app.stage) this.app.stage.addChild(wl);
+      const sw = this.app.screen.width;
+      const sh = this.app.screen.height;
+      this.weatherSystem.update(dt, this.lightSystem.timeT, { minX: 0, maxX: sw, minY: -20, maxY: sh }, !isReduced);
       this.animManager.update(dt, undefined, isReduced);
       this.bubbleManager.tick(!isReduced);
     } else {
