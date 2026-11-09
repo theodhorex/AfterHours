@@ -1,14 +1,25 @@
 /**
- * Procedural isometric props, trees (mushrooms, crystals, ferns, great trees),
- * lanterns, stalls, and actors with 1px dark outlines and nearest-neighbour scaling.
+ * Procedural isometric props, shaded pixel-art trees (mushrooms, crystals, ferns, great trees),
+ * small props (bushes, boulders, fences, lamp posts, wells, barrels, crates),
+ * stalls, and actors with selective dark outlines and nearest-neighbour scaling.
  */
 
 import { Graphics, type Renderer, type Texture } from "pixi.js";
 import type { ArcPalette } from "./sprites-ground.ts";
 import { shade, outlineColor, getTheme, type ThemeTokens } from "./theme.ts";
+import { drawSurfaceToGraphics } from "./prop-helpers.ts";
+import { bakeTreePixels } from "./prop-trees.ts";
+import {
+  SMALL_PROP_KINDS,
+  bakeSmallPropPixels,
+  drawSmallPropGraphics,
+  type SmallPropKind,
+} from "./prop-small.ts";
 
-export function drawDropShadow(g: Graphics, rx = 12, ry = 6, alpha = 0.35): void {
-  g.ellipse(0, 0, rx, ry).fill({ color: 0x080604, alpha });
+export { SMALL_PROP_KINDS, drawSmallPropGraphics, type SmallPropKind };
+
+export function drawDropShadow(g: Graphics, rx = 12, ry = 6, alpha = 0.25): void {
+  g.ellipse(0, 0, rx, ry).fill({ color: 0x162238, alpha });
 }
 
 export interface ElfTreeFoliage {
@@ -17,7 +28,12 @@ export interface ElfTreeFoliage {
   shadowColor: number;
   isBlossom: boolean;
   isAutumnGold: boolean;
-  sortName: "green_broadleaf" | "pink_blossom" | "elder_broadleaf" | "autumn_gold" | "frost_evergreen";
+  sortName:
+    | "green_broadleaf"
+    | "pink_blossom"
+    | "elder_broadleaf"
+    | "autumn_gold"
+    | "frost_evergreen";
 }
 
 /**
@@ -29,9 +45,8 @@ export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage 
   const seasonIdx = ((Math.floor(season) % 4) + 4) % 4;
 
   if (seasonIdx === 0) {
-    // Spring: only sort 1 is pink blossom; sorts 0 and 2 are green broadleaf
     if (normSort === 1) {
-      const color = 0xf472b6; // Cherry blossom pink
+      const color = 0xf472b6;
       return {
         color,
         highlightColor: 0xfbcfe8,
@@ -42,7 +57,7 @@ export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage 
       };
     }
     if (normSort === 2) {
-      const color = 0x48bb78; // Fresh spring broadleaf
+      const color = 0x48bb78;
       return {
         color,
         highlightColor: shade(color, 1.2),
@@ -52,7 +67,7 @@ export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage 
         sortName: "elder_broadleaf",
       };
     }
-    const color = 0x2d6a4f; // Deep emerald broadleaf
+    const color = 0x2d6a4f;
     return {
       color,
       highlightColor: shade(color, 1.2),
@@ -64,7 +79,6 @@ export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage 
   }
 
   if (seasonIdx === 1) {
-    // Summer: plain green broadleaf for all sorts (zero blossom)
     const greens = [0x2d6a4f, 0x38a050, 0x40916c];
     const color = greens[normSort];
     return {
@@ -78,7 +92,6 @@ export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage 
   }
 
   if (seasonIdx === 2) {
-    // Autumn: gold in autumn for all 3 sorts
     const golds = [0xeab308, 0xf59e0b, 0xd97706];
     const color = golds[normSort];
     return {
@@ -91,7 +104,6 @@ export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage 
     };
   }
 
-  // Winter: frost / winter evergreen
   const color = 0x8ca89a;
   return {
     color,
@@ -103,8 +115,19 @@ export function getElfTreeFoliage(sort: number, season: number): ElfTreeFoliage 
   };
 }
 
+function resolveArcId(pal: ArcPalette | ThemeTokens): string {
+  if ("arcId" in pal && typeof pal.arcId === "string") return pal.arcId;
+  if ("treeStyle" in pal) {
+    if (pal.treeStyle === "crystal") return "cave_hold";
+    if (pal.treeStyle === "fern") return "dino_vale";
+    if (pal.treeStyle === "great_tree") return "elf_grove";
+  }
+  return "goblin_warrens";
+}
+
 /**
- * Draws arc-specific tree/foliage (mushrooms, crystals, ferns, great trees) with 1px dark outline.
+ * Draws shaded pixel-art arc-specific tree (3 variants per arc, 5-6 step hue-shifted canopy ramp,
+ * dithered edge clumps, outlined trunk, and soft blue-tinted ground shadow ellipse).
  */
 export function drawTreeGraphics(
   g: Graphics,
@@ -112,73 +135,73 @@ export function drawTreeGraphics(
   pal: ArcPalette | ThemeTokens,
   season = 0
 ): void {
-  drawDropShadow(g, 10, 5, 0.35);
+  const arcId = resolveArcId(pal);
+  const sIdx = "seasonIndex" in pal ? pal.seasonIndex : season;
+  const baked = bakeTreePixels(treeType, arcId, sIdx);
+  drawSurfaceToGraphics(g, baked);
+}
 
-  const theme = "treeStyle" in pal ? pal : getTheme("goblin_warrens", season);
-  const treeStyle = theme.treeStyle;
-  const hasSnow = theme.hasSnowCaps;
+export function drawBushGraphics(
+  g: Graphics,
+  pal: ArcPalette | ThemeTokens,
+  variant = 0,
+  season = 0
+): void {
+  drawSurfaceToGraphics(g, bakeSmallPropPixels("bush", resolveArcId(pal), variant, season));
+}
 
-  if (treeStyle === "mushroom") {
-    // Goblin Warrens: Giant procedural mushroom
-    const stalkCol = 0x3d3042;
-    g.rect(-2.5, -16, 5, 16).fill({ color: stalkCol }).stroke({ color: outlineColor(stalkCol), width: 1 });
-    // Fungal gills
-    g.ellipse(0, -15, 12, 4).fill({ color: 0x221826 });
+export function drawBoulderGraphics(
+  g: Graphics,
+  pal: ArcPalette | ThemeTokens,
+  variant = 0,
+  season = 0
+): void {
+  drawSurfaceToGraphics(g, bakeSmallPropPixels("boulder", resolveArcId(pal), variant, season));
+}
 
-    // Mushroom Cap
-    let capCol = theme.seasonName === "autumn" ? 0x9a3412 : 0x7c3aed;
-    if (hasSnow) capCol = 0xf0f8ff;
-    g.ellipse(0, -18, 14, 9).fill({ color: capCol }).stroke({ color: outlineColor(capCol), width: 1 });
-    // Cap spots
-    const spotCol = hasSnow ? 0xbfdbfe : 0xfbbf24;
-    g.circle(-5, -20, 1.8).fill({ color: spotCol });
-    g.circle(4, -17, 1.5).fill({ color: spotCol });
-    g.circle(0, -22, 1.2).fill({ color: spotCol });
-  } else if (treeStyle === "crystal") {
-    // Cave Hold: Sharp glowing crystal clusters
-    const cryCol = 0x38bdf8;
-    g.poly([-6, 0, -2, -26, 0, -28, 2, -24, 6, 0])
-      .fill({ color: cryCol })
-      .stroke({ color: outlineColor(cryCol), width: 1 });
-    g.poly([-2, 0, 0, -28, 2, -24, 0, 0]).fill({ color: 0xbae6fd });
-    g.poly([4, 0, 8, -16, 12, 0]).fill({ color: 0x0284c7 });
-  } else if (treeStyle === "fern") {
-    // Dino Vale: Giant cycad / tree fern
-    g.rect(-2, -14, 4, 14).fill({ color: 0x3d2b1a }).stroke({ color: 0x1f140a, width: 1 });
-    const fCol = theme.seasonName === "autumn" ? 0xb45309 : pal.grass;
-    g.poly([0, -14, -12, -20, -16, -14]).stroke({ color: fCol, width: 2 });
-    g.poly([0, -14, 12, -20, 16, -14]).stroke({ color: fCol, width: 2 });
-    g.poly([0, -14, 0, -26]).stroke({ color: fCol, width: 2.2 });
-    g.circle(0, -14, 3).fill({ color: fCol });
-  } else if (treeStyle === "great_tree") {
-    // Elf Grove: Ancient broad canopy tree with houses in trunks
-    // Mixes 3 sorts: green broadleaf, pink blossom only in spring, gold in autumn, plain green other seasons
-    g.rect(-4, -18, 8, 18).fill({ color: 0x243326 }).stroke({ color: 0x101a12, width: 1 });
-    g.rect(-1.5, -6, 3, 5).fill({ color: 0x152217 });
-    g.circle(0, -11, 1.5).fill({ color: 0xfef08a }); // Lit window in trunk
+export function drawFenceGraphics(
+  g: Graphics,
+  pal: ArcPalette | ThemeTokens,
+  variant = 0,
+  season = 0
+): void {
+  drawSurfaceToGraphics(g, bakeSmallPropPixels("fence", resolveArcId(pal), variant, season));
+}
 
-    const foliage = getElfTreeFoliage(treeType, season);
-    const leafCol = hasSnow ? 0xf0f8ff : foliage.color;
-    const hiCol = hasSnow ? 0xffffff : foliage.highlightColor;
-    const shCol = hasSnow ? 0xd0e8f2 : foliage.shadowColor;
+export function drawLampPostGraphics(
+  g: Graphics,
+  pal: ArcPalette | ThemeTokens,
+  variant = 0,
+  season = 0
+): void {
+  drawSurfaceToGraphics(g, bakeSmallPropPixels("lamp_post", resolveArcId(pal), variant, season));
+}
 
-    g.circle(0, -22, 13).fill({ color: leafCol }).stroke({ color: outlineColor(leafCol), width: 1 });
-    g.circle(-6, -26, 9).fill({ color: hiCol });
-    g.circle(6, -24, 8).fill({ color: shCol });
+export function drawWellGraphics(
+  g: Graphics,
+  pal: ArcPalette | ThemeTokens,
+  variant = 0,
+  season = 0
+): void {
+  drawSurfaceToGraphics(g, bakeSmallPropPixels("well", resolveArcId(pal), variant, season));
+}
 
-    if (foliage.isBlossom && !hasSnow) {
-      // Pink blossom flower accents on blossom sort
-      g.circle(-3, -20, 1.5).fill({ color: 0xfdf2f8 });
-      g.circle(3, -21, 1.2).fill({ color: 0xfdf2f8 });
-      g.circle(0, -25, 1.4).fill({ color: 0xfdf2f8 });
-    }
-  } else {
-    // Default Pine / Broadleaf / Birch
-    g.rect(-2, -14, 4, 14).fill({ color: 0x3d2b1a }).stroke({ color: 0x1a120b, width: 1 });
-    const leafCol = hasSnow ? 0xf0f8ff : pal.forest;
-    g.poly([0, -22, 12, -10, 0, -8, -12, -10]).fill({ color: leafCol }).stroke({ color: outlineColor(leafCol), width: 1 });
-    g.poly([0, -32, 8, -20, -8, -20]).fill({ color: shade(leafCol, 1.15) }).stroke({ color: outlineColor(leafCol), width: 1 });
-  }
+export function drawBarrelGraphics(
+  g: Graphics,
+  pal: ArcPalette | ThemeTokens,
+  variant = 0,
+  season = 0
+): void {
+  drawSurfaceToGraphics(g, bakeSmallPropPixels("barrel", resolveArcId(pal), variant, season));
+}
+
+export function drawCrateGraphics(
+  g: Graphics,
+  pal: ArcPalette | ThemeTokens,
+  variant = 0,
+  season = 0
+): void {
+  drawSurfaceToGraphics(g, bakeSmallPropPixels("crate", resolveArcId(pal), variant, season));
 }
 
 /**
@@ -189,7 +212,7 @@ export function drawSupportingBuildingGraphics(
   kind: string,
   pal: ArcPalette
 ): void {
-  drawDropShadow(g, 16, 8, 0.32);
+  drawDropShadow(g, 16, 8, 0.25);
   const wallCol = pal.primary;
   const roofCol = pal.secondary;
   const wallBorder = outlineColor(wallCol);
@@ -206,7 +229,6 @@ export function drawSupportingBuildingGraphics(
     g.poly([-11, -15, 0, -10, 11, -15, 0, -19]).fill({ color: 0x1f1a14 }).stroke({ color: 0x0f0c09, width: 1 });
     g.rect(4, -22, 3, 9).fill({ color: 0x261f17 });
   } else {
-    // Default shack / store
     g.poly([-10, 0, 0, 5, 0, -9, -10, -14]).fill({ color: wallCol }).stroke({ color: wallBorder, width: 1 });
     g.poly([0, 5, 10, 0, 10, -9, 0, -5]).fill({ color: shade(wallCol, 0.75) }).stroke({ color: wallBorder, width: 1 });
     g.poly([-11, -14, 0, -9, 11, -14, 0, -17]).fill({ color: roofCol }).stroke({ color: roofBorder, width: 1 });
@@ -221,7 +243,8 @@ export function drawMarketStallGraphics(
   itemId: string,
   pal: ArcPalette
 ): void {
-  drawDropShadow(g, 12, 6, 0.3);
+  void itemId;
+  drawDropShadow(g, 12, 6, 0.25);
   g.poly([-8, 0, 0, 4, 8, 0, 0, -4]).fill({ color: 0x423120 }).stroke({ color: 0x1c140c, width: 1 });
   g.rect(-7, -10, 1.5, 10).fill({ color: 0x22180e });
   g.rect(6, -10, 1.5, 10).fill({ color: 0x22180e });
@@ -231,7 +254,7 @@ export function drawMarketStallGraphics(
 }
 
 /**
- * Draws rural features (farmland, orchard, fence, well, pond).
+ * Draws rural features (farmland, orchard, fence, well, pond, etc.).
  */
 export function drawRuralFeatureGraphics(
   g: Graphics,
@@ -242,44 +265,42 @@ export function drawRuralFeatureGraphics(
     g.poly([-14, 0, 0, 7, 14, 0, 0, -7]).fill({ color: 0x3a2c1a }).stroke({ color: 0x1a1309, width: 1 });
     g.poly([-10, 1, 0, 5, 10, 1]).stroke({ color: pal.grass, width: 1.5 });
   } else if (kind === "bone_fences" || kind === "fence") {
-    // Dino Vale: Bone fence
-    g.poly([-12, 1, 12, -5]).stroke({ color: 0xf3f4f6, width: 2 });
-    g.rect(-10, -8, 2, 9).fill({ color: 0xe5e7eb });
-    g.rect(8, -8, 2, 9).fill({ color: 0xe5e7eb });
+    drawFenceGraphics(g, pal);
   } else if (kind === "eggs" || kind === "nests") {
-    // Dino Vale: Dinosaur eggs in straw nest
     g.ellipse(0, 0, 9, 5).fill({ color: 0x5c4224 });
     g.ellipse(-3, -2, 2.5, 3.5).fill({ color: 0xfef9c3 }).stroke({ color: 0xca8a04, width: 0.5 });
     g.ellipse(3, -2, 2.5, 3.5).fill({ color: 0xfef9c3 }).stroke({ color: 0xca8a04, width: 0.5 });
   } else if (kind === "ore_carts") {
-    // Cave Hold: Ore cart
-    drawDropShadow(g, 8, 4, 0.35);
+    drawDropShadow(g, 8, 4, 0.25);
     g.rect(-6, -7, 12, 5).fill({ color: 0x334455 }).stroke({ color: 0x1e293b, width: 1 });
     g.circle(-4, -2, 2).fill({ color: 0x0f172a });
     g.circle(4, -2, 2).fill({ color: 0x0f172a });
     g.circle(0, -8, 2.5).fill({ color: 0x38bdf8 });
   } else if (kind === "mine_entrances") {
-    // Cave Hold: Mine entrance
     g.poly([-12, 0, 0, 6, 12, 0, 0, -6]).fill({ color: 0x1e293b });
     g.poly([-10, 0, 0, -18, 10, 0]).stroke({ color: 0x5a4225, width: 3 });
   } else if (kind === "rope_bridges") {
-    // Elf Grove: Rope bridge
     g.poly([-14, -2, 0, 4, 14, -2]).stroke({ color: 0x92400e, width: 1.5 });
     g.poly([-14, -8, 0, -3, 14, -8]).stroke({ color: 0xb45309, width: 1.5 });
   } else if (kind === "flower_beds") {
-    // Elf Grove: Glowing subtle flower beds
     g.ellipse(0, 0, 8, 4).fill({ color: 0x1b4332 });
     g.circle(-3, -2, 1.5).fill({ color: 0xf472b6 });
     g.circle(3, -2, 1.5).fill({ color: 0x38bdf8 });
   } else if (kind === "orchard") {
     drawTreeGraphics(g, 1, pal);
-    g.circle(-3, -22, 1.5).fill({ color: 0xd94f38 });
   } else if (kind === "well") {
-    drawDropShadow(g, 8, 4, 0.35);
-    g.ellipse(0, 0, 7, 3.5).fill({ color: 0x3d3830 }).stroke({ color: 0x1c1a16, width: 1 });
-    g.ellipse(0, -1, 5, 2.5).fill({ color: 0x1b3c50 });
+    drawWellGraphics(g, pal);
+  } else if (kind === "bush") {
+    drawBushGraphics(g, pal);
+  } else if (kind === "boulder") {
+    drawBoulderGraphics(g, pal);
+  } else if (kind === "lamp_post" || kind === "lanterns") {
+    drawLampPostGraphics(g, pal);
+  } else if (kind === "barrel") {
+    drawBarrelGraphics(g, pal);
+  } else if (kind === "crate") {
+    drawCrateGraphics(g, pal);
   } else {
-    // Pond
     g.ellipse(0, 0, 12, 6).fill({ color: pal.water }).stroke({ color: outlineColor(pal.water), width: 1 });
   }
 }
@@ -288,7 +309,7 @@ export function drawRuralFeatureGraphics(
  * Draws municipal plaza fountain for stage 3+.
  */
 export function drawFountainGraphics(g: Graphics, pal: ArcPalette): void {
-  drawDropShadow(g, 22, 11, 0.38);
+  drawDropShadow(g, 22, 11, 0.28);
   g.ellipse(0, 0, 18, 9).fill({ color: 0x47443e }).stroke({ color: 0x1c1a16, width: 1 });
   g.ellipse(0, -1, 14, 7).fill({ color: pal.water });
   g.rect(-4, -12, 8, 11).fill({ color: 0x5a544b });
@@ -300,7 +321,7 @@ export function drawFountainGraphics(g: Graphics, pal: ArcPalette): void {
  * Tiny animated citizen (6x12) with 1px outline.
  */
 export function drawCitizenGraphics(g: Graphics, pal: ArcPalette): void {
-  g.ellipse(0, 0, 4, 2).fill({ color: 0x000000, alpha: 0.35 });
+  g.ellipse(0, 0, 4, 2).fill({ color: 0x162238, alpha: 0.25 });
   g.rect(-2, -4, 1.5, 4).fill({ color: 0x140e09 });
   g.rect(0.5, -4, 1.5, 4).fill({ color: 0x140e09 });
   g.rect(-2.5, -9, 5, 5).fill({ color: pal.primary }).stroke({ color: outlineColor(pal.primary), width: 0.75 });
@@ -312,7 +333,7 @@ export function drawCitizenGraphics(g: Graphics, pal: ArcPalette): void {
  * Tiny merchant cart (12x10).
  */
 export function drawCartGraphics(g: Graphics, pal: ArcPalette): void {
-  g.ellipse(0, 0, 8, 4).fill({ color: 0x000000, alpha: 0.35 });
+  g.ellipse(0, 0, 8, 4).fill({ color: 0x162238, alpha: 0.25 });
   g.circle(-5, -2, 2.5).fill({ color: 0x140d07 });
   g.circle(5, -2, 2.5).fill({ color: 0x140d07 });
   g.poly([-7, -4, 7, -4, 6, -9, -6, -9]).fill({ color: 0x4a3621 }).stroke({ color: 0x1f140a, width: 1 });
@@ -320,7 +341,7 @@ export function drawCartGraphics(g: Graphics, pal: ArcPalette): void {
 }
 
 /**
- * Texture cache for props, trees, and mobile actors with nearest-neighbour scaling.
+ * Texture cache for props, trees, small props, and mobile actors with nearest-neighbour scaling.
  */
 export class PropTextureCache {
   private cache = new Map<string, Texture>();
@@ -330,18 +351,14 @@ export class PropTextureCache {
     this.renderer = renderer;
   }
 
-  getTreeTexture(treeType: number, arcId: string, pal: ArcPalette, season = 0): Texture {
-    const key = `tree_${treeType}_${arcId}_s${season}`;
+  private bakeAndCache(key: string, drawFn: (g: Graphics) => void): Texture {
     let tex = this.cache.get(key);
     if (!tex) {
       const g = new Graphics();
-      const theme = getTheme(arcId, season);
-      drawTreeGraphics(g, treeType, theme, season);
+      drawFn(g);
       tex = this.renderer.generateTexture({
         target: g,
-        textureSourceOptions: {
-          scaleMode: "nearest",
-        },
+        textureSourceOptions: { scaleMode: "nearest" },
         antialias: false,
       });
       tex.source.scaleMode = "nearest";
@@ -349,114 +366,82 @@ export class PropTextureCache {
       g.destroy();
     }
     return tex;
+  }
+
+  getTreeTexture(treeType: number, arcId: string, pal: ArcPalette, season = 0): Texture {
+    void pal;
+    const normVariant = ((Math.floor(treeType) % 3) + 3) % 3;
+    const key = `tree_${normVariant}_${arcId}_s${season}`;
+    return this.bakeAndCache(key, (g) => {
+      const theme = getTheme(arcId, season);
+      drawTreeGraphics(g, normVariant, theme, season);
+    });
+  }
+
+  getSmallPropTexture(
+    kind: SmallPropKind,
+    arcId: string,
+    pal: ArcPalette,
+    variant = 0,
+    season = 0
+  ): Texture {
+    void pal;
+    const key = `sprop_${kind}_${arcId}_v${variant}_s${season}`;
+    return this.bakeAndCache(key, (g) => {
+      drawSmallPropGraphics(g, kind, arcId, variant, season);
+    });
+  }
+
+  getBushTexture(arcId: string, pal: ArcPalette, variant = 0, season = 0): Texture {
+    return this.getSmallPropTexture("bush", arcId, pal, variant, season);
+  }
+
+  getBoulderTexture(arcId: string, pal: ArcPalette, variant = 0, season = 0): Texture {
+    return this.getSmallPropTexture("boulder", arcId, pal, variant, season);
+  }
+
+  getFenceTexture(arcId: string, pal: ArcPalette, variant = 0, season = 0): Texture {
+    return this.getSmallPropTexture("fence", arcId, pal, variant, season);
+  }
+
+  getLampPostTexture(arcId: string, pal: ArcPalette, variant = 0, season = 0): Texture {
+    return this.getSmallPropTexture("lamp_post", arcId, pal, variant, season);
+  }
+
+  getWellTexture(arcId: string, pal: ArcPalette, variant = 0, season = 0): Texture {
+    return this.getSmallPropTexture("well", arcId, pal, variant, season);
+  }
+
+  getBarrelTexture(arcId: string, pal: ArcPalette, variant = 0, season = 0): Texture {
+    return this.getSmallPropTexture("barrel", arcId, pal, variant, season);
+  }
+
+  getCrateTexture(arcId: string, pal: ArcPalette, variant = 0, season = 0): Texture {
+    return this.getSmallPropTexture("crate", arcId, pal, variant, season);
   }
 
   getSupportingTexture(kind: string, arcId: string, pal: ArcPalette): Texture {
-    const key = `supp_${kind}_${arcId}`;
-    let tex = this.cache.get(key);
-    if (!tex) {
-      const g = new Graphics();
-      drawSupportingBuildingGraphics(g, kind, pal);
-      tex = this.renderer.generateTexture({
-        target: g,
-        textureSourceOptions: { scaleMode: "nearest" },
-        antialias: false,
-      });
-      tex.source.scaleMode = "nearest";
-      this.cache.set(key, tex);
-      g.destroy();
-    }
-    return tex;
+    return this.bakeAndCache(`supp_${kind}_${arcId}`, (g) => drawSupportingBuildingGraphics(g, kind, pal));
   }
 
   getStallTexture(itemId: string, arcId: string, pal: ArcPalette): Texture {
-    const key = `stall_${itemId}_${arcId}`;
-    let tex = this.cache.get(key);
-    if (!tex) {
-      const g = new Graphics();
-      drawMarketStallGraphics(g, itemId, pal);
-      tex = this.renderer.generateTexture({
-        target: g,
-        textureSourceOptions: { scaleMode: "nearest" },
-        antialias: false,
-      });
-      tex.source.scaleMode = "nearest";
-      this.cache.set(key, tex);
-      g.destroy();
-    }
-    return tex;
+    return this.bakeAndCache(`stall_${itemId}_${arcId}`, (g) => drawMarketStallGraphics(g, itemId, pal));
   }
 
   getRuralTexture(kind: string, arcId: string, pal: ArcPalette): Texture {
-    const key = `rural_${kind}_${arcId}`;
-    let tex = this.cache.get(key);
-    if (!tex) {
-      const g = new Graphics();
-      drawRuralFeatureGraphics(g, kind, pal);
-      tex = this.renderer.generateTexture({
-        target: g,
-        textureSourceOptions: { scaleMode: "nearest" },
-        antialias: false,
-      });
-      tex.source.scaleMode = "nearest";
-      this.cache.set(key, tex);
-      g.destroy();
-    }
-    return tex;
+    return this.bakeAndCache(`rural_${kind}_${arcId}`, (g) => drawRuralFeatureGraphics(g, kind, pal));
   }
 
   getFountainTexture(arcId: string, pal: ArcPalette): Texture {
-    const key = `fountain_${arcId}`;
-    let tex = this.cache.get(key);
-    if (!tex) {
-      const g = new Graphics();
-      drawFountainGraphics(g, pal);
-      tex = this.renderer.generateTexture({
-        target: g,
-        textureSourceOptions: { scaleMode: "nearest" },
-        antialias: false,
-      });
-      tex.source.scaleMode = "nearest";
-      this.cache.set(key, tex);
-      g.destroy();
-    }
-    return tex;
+    return this.bakeAndCache(`fountain_${arcId}`, (g) => drawFountainGraphics(g, pal));
   }
 
   getCitizenTexture(arcId: string, pal: ArcPalette): Texture {
-    const key = `citizen_${arcId}`;
-    let tex = this.cache.get(key);
-    if (!tex) {
-      const g = new Graphics();
-      drawCitizenGraphics(g, pal);
-      tex = this.renderer.generateTexture({
-        target: g,
-        textureSourceOptions: { scaleMode: "nearest" },
-        antialias: false,
-      });
-      tex.source.scaleMode = "nearest";
-      this.cache.set(key, tex);
-      g.destroy();
-    }
-    return tex;
+    return this.bakeAndCache(`citizen_${arcId}`, (g) => drawCitizenGraphics(g, pal));
   }
 
   getCartTexture(arcId: string, pal: ArcPalette): Texture {
-    const key = `cart_${arcId}`;
-    let tex = this.cache.get(key);
-    if (!tex) {
-      const g = new Graphics();
-      drawCartGraphics(g, pal);
-      tex = this.renderer.generateTexture({
-        target: g,
-        textureSourceOptions: { scaleMode: "nearest" },
-        antialias: false,
-      });
-      tex.source.scaleMode = "nearest";
-      this.cache.set(key, tex);
-      g.destroy();
-    }
-    return tex;
+    return this.bakeAndCache(`cart_${arcId}`, (g) => drawCartGraphics(g, pal));
   }
 
   destroy(): void {

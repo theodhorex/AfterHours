@@ -6,6 +6,8 @@
 import { Graphics, type Renderer, type Texture } from "pixi.js";
 import type { TileKind } from "./terrain.ts";
 import { getTheme, shade, outlineColor, type ThemeTokens } from "./theme.ts";
+import { drawSurfaceToGraphics } from "./prop-helpers.ts";
+import { bakeRoadPixels, bakeBridgePixels } from "./prop-roads.ts";
 
 export interface ArcPalette {
   primary: number;
@@ -42,6 +44,23 @@ export function drawTileGraphics(
   variant = 0,
   roadMask = 0
 ): void {
+  if (kind === "road") {
+    const roadStyle = "roadStyle" in pal ? pal.roadStyle : "cobble";
+    const arcId = "arcId" in pal && typeof pal.arcId === "string" ? pal.arcId : "goblin_warrens";
+    const season = "seasonIndex" in pal ? pal.seasonIndex : 0;
+    const baked = bakeRoadPixels(roadStyle, variant, roadMask, arcId, season);
+    drawSurfaceToGraphics(g, baked);
+    return;
+  }
+
+  if (kind === "bridge") {
+    const arcId = "arcId" in pal && typeof pal.arcId === "string" ? pal.arcId : "goblin_warrens";
+    const season = "seasonIndex" in pal ? pal.seasonIndex : 0;
+    const baked = bakeBridgePixels(variant, roadMask, arcId, season);
+    drawSurfaceToGraphics(g, baked);
+    return;
+  }
+
   const delta = variant === 0 ? 0 : variant === 1 ? -12 : 12;
 
   let topColor = shade(pal.grass, 1 + delta / 100);
@@ -59,12 +78,6 @@ export function drawTileGraphics(
   } else if (kind === "forest") {
     topColor = shade(pal.forest, 1 + delta / 100);
     skirtColor = shade(pal.forest, 0.55);
-  } else if (kind === "road") {
-    topColor = shade(pal.road, 1 + delta / 100);
-    skirtColor = pal.roadCurb;
-  } else if (kind === "bridge") {
-    topColor = shade(pal.bridge, 1 + delta / 100);
-    skirtColor = shade(pal.bridge, 0.6);
   }
 
   const border = outlineColor(topColor);
@@ -129,45 +142,6 @@ export function drawTileGraphics(
     // Forest underbrush with crisp outlines
     g.circle(-4, -2, 3.5).fill({ color: shade(topColor, 0.8) }).stroke({ color: border, width: 0.75 });
     g.circle(5, 0, 3).fill({ color: shade(topColor, 0.75) }).stroke({ color: border, width: 0.75 });
-  } else if (kind === "road") {
-    const hasN = (roadMask & 1) !== 0;
-    const hasE = (roadMask & 2) !== 0;
-    const hasS = (roadMask & 4) !== 0;
-    const hasW = (roadMask & 8) !== 0;
-    const curbCol = pal.roadCurb;
-
-    if (!hasW) g.poly([-32, 0, 0, -16]).stroke({ color: curbCol, width: 1.5 });
-    if (!hasN) g.poly([0, -16, 32, 0]).stroke({ color: curbCol, width: 1.5 });
-    if (!hasE) g.poly([32, 0, 0, 16]).stroke({ color: curbCol, width: 1.5 });
-    if (!hasS) g.poly([0, 16, -32, 0]).stroke({ color: curbCol, width: 1.5 });
-
-    const roadStyle = "roadStyle" in pal ? pal.roadStyle : "cobble";
-
-    if (roadStyle === "mine_rails") {
-      // Cave hold iron rails + wooden ties
-      g.poly([-16, -8, 16, 8]).stroke({ color: 0x222222, width: 1.5 });
-      g.poly([-12, -10, 20, 6]).stroke({ color: 0x222222, width: 1.5 });
-      g.poly([-14, -2, -10, -6]).stroke({ color: 0x4a3b2b, width: 2 });
-      g.poly([-2, 4, 2, 0]).stroke({ color: 0x4a3b2b, width: 2 });
-      g.poly([10, 10, 14, 6]).stroke({ color: 0x4a3b2b, width: 2 });
-    } else if (roadStyle === "root_path") {
-      // Goblin / Elf tangled root path
-      g.poly([-18, 2, -4, -4, 12, 6, 22, -2]).stroke({ color: 0x26190e, width: 1.5 });
-      g.circle(2, 0, 1.5).fill({ color: pal.accent });
-    } else {
-      // Standard cobblestone paving
-      g.poly([-16, 0, 0, 8, 16, 0, 0, -8]).stroke({ color: curbCol, width: 1, alpha: 0.6 });
-      if (variant === 1) {
-        g.rect(-2, -1, 3, 2).fill({ color: shade(topColor, 0.8) });
-      }
-    }
-  } else if (kind === "bridge") {
-    // Plank bridge with 1px dark outline
-    g.poly([-16, -8, 16, 8]).stroke({ color: 0x1f150b, width: 1.5 });
-    g.poly([-16, 8, 16, -8]).stroke({ color: 0x1f150b, width: 1.5 });
-    g.rect(-24, -8, 3, 6).fill({ color: 0x1f150b });
-    g.rect(21, -8, 3, 6).fill({ color: 0x1f150b });
-    g.poly([-24, -6, 21, -6]).stroke({ color: 0x2e1e0f, width: 1 });
   }
 }
 
