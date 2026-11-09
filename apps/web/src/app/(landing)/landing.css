@@ -20,7 +20,9 @@
   overflow-x: clip;
 }
 html.lenis, html.lenis body { height: auto; }
+html.lenis, html.lenis body { scroll-behavior: auto !important; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
 .lp a { color: inherit; }
 .lp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .lp-skip { position: absolute; left: 1rem; top: -4rem; z-index: 80; background: var(--gold); color: #12100e; padding: .6rem 1rem; }
@@ -60,7 +62,7 @@ html.lenis, html.lenis body { height: auto; }
 .lp-t-mid { font-style: italic; font-size: .42em; color: rgb(var(--lp-rgb)); }
 .lp-t-right { text-align: left; color: color-mix(in srgb, rgb(var(--lp-rgb)) 60%, white); text-shadow: 0 2px 40px rgba(0,0,0,.9), 0 0 60px rgba(var(--lp-rgb), .6); }
 .lp-word { display: inline-block; white-space: nowrap; }
-.lp-ch { display: inline-block; animation: lp-char 900ms cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i) * 34ms); }
+.lp-ch { display: inline-block; animation: lp-char 900ms cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--i) * 34ms); }
 .lp-t-left .lp-ch { animation-delay: calc(var(--i) * 38ms + 750ms); }
 @keyframes lp-char { from { opacity: 0; transform: translateY(.45em) rotate(5deg); filter: blur(12px); } to { opacity: 1; transform: none; filter: none; } }
 .lp-hint { margin: 1.75rem 0 0; font-family: var(--display); font-style: italic; font-size: 1.1rem; color: var(--bone-soft); animation: lp-fade 1.4s 2.2s ease-out both; }
@@ -122,7 +124,7 @@ html.lenis, html.lenis body { height: auto; }
 .lp-node:hover .lp-node-hex, .lp-node:focus-visible .lp-node-hex, .lp-node[data-on="true"] .lp-node-hex { fill: rgba(var(--lp-rgb), .42); stroke-width: 3; }
 .lp-node:focus-visible .lp-node-hex { stroke: #fff; }
 .lp-trade path { fill: none; stroke: rgba(240,230,210,.28); stroke-width: 1.2; stroke-dasharray: 3 6; }
-.lp-trade circle { fill: var(--gold); filter: drop-shadow(0 0 6px rgba(229,179,88,.9)); }
+.lp-trade circle { fill: var(--gold); stroke: rgba(229,179,88,.35); stroke-width: 7px; paint-order: stroke; }
 .lp-lane-caption { min-height: 1.5em; margin: .5rem 0 0; font-family: var(--display); font-style: italic; font-size: 1.15rem; color: var(--bone-soft); }
 .lp-facts { margin: 1rem 0 .75rem; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; border-top: 1px solid var(--line); padding-top: 1.25rem; }
 .lp-facts > div { display: flex; flex-direction: column-reverse; gap: .25rem; }
@@ -140,12 +142,12 @@ html.lenis, html.lenis body { height: auto; }
 .lp-reg[data-active="true"] .lp-hex { transform: translateY(-6px); }
 .lp-route { fill: none; stroke: rgba(240,230,210,.4); stroke-width: 1.6; stroke-dasharray: 2 7; stroke-linecap: round; transition: stroke 300ms; }
 .lp-routes g[data-hot="true"] .lp-route { stroke: var(--gold); stroke-width: 2.4; }
-.lp-caravan { fill: var(--bone); filter: drop-shadow(0 0 5px rgba(255,255,255,.8)); }
+.lp-caravan { fill: var(--bone); stroke: rgba(255,255,255,.3); stroke-width: 6px; paint-order: stroke; }
 .lp-routes g[data-hot="true"] .lp-caravan { fill: var(--gold); }
 .lp-cargo { fill: var(--bone); font-family: var(--display); font-style: italic; font-size: 20px; paint-order: stroke; stroke: rgba(8,6,12,.85); stroke-width: 5px; }
 .lp-glint { animation: lp-twinkle 2.6s ease-in-out infinite alternate; }
-.lp-lava { filter: drop-shadow(0 0 4px #ff6a2a); animation: lp-twinkle 1.8s ease-in-out infinite alternate; }
-.lp-beacon { filter: drop-shadow(0 0 6px currentColor); animation: lp-twinkle 1.6s ease-in-out infinite alternate; }
+.lp-lava { animation: lp-twinkle 1.8s ease-in-out infinite alternate; }
+.lp-beacon { stroke: currentColor; stroke-opacity: .35; stroke-width: 7px; paint-order: stroke; animation: lp-twinkle 1.6s ease-in-out infinite alternate; }
 @keyframes lp-twinkle { from { opacity: .45; } to { opacity: 1; } }
 .lp-fieldnote { --lp-rgb: 229,179,88; padding: 1.5rem 1.5rem 1.75rem; border-left: 2px solid rgb(var(--lp-rgb)); background: linear-gradient(90deg, rgba(var(--lp-rgb), .08), transparent 80%); transition: border-color 400ms, background 400ms; }
 .lp-tabs { display: grid; gap: .1rem; margin-bottom: 1.5rem; }

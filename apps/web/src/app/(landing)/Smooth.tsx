@@ -15,7 +15,7 @@ export function Smooth() {
     let tick: ((t: number) => void) | null = null;
 
     if (!reduce) {
-      lenis = new Lenis({ duration: 1.15, easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+      lenis = new Lenis({ lerp: 0.085, wheelMultiplier: 0.95, smoothWheel: true });
       lenis.on("scroll", ScrollTrigger.update);
       tick = (t: number) => lenis?.raf(t * 1000);
       gsap.ticker.add(tick);
