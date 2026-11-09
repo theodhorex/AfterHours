@@ -12,12 +12,13 @@ import {
   type Application,
 } from "pixi.js";
 import { bakeGround } from "./ground-bake.ts";
-import { isoToScreen, depthSortKey, isClick, getTileVariant } from "./iso-math.ts";
+import { isoToScreen, depthSortKey, isClick, getTileVariant, getMapScreenBounds } from "./iso-math.ts";
 import { IsoTextureManager } from "./sprites.ts";
 import { IsoAnimationManager, generateActors } from "./animation.ts";
 import { IsoWeatherManager } from "./weather.ts";
 import { getTheme, type ThemeTokens } from "./theme.ts";
 import { drawDistrictHighlights, makeBuildingBadge, BubblePoolManager } from "./render-ui.ts";
+import { getReducedMotion } from "../a11y/reduced-motion.ts";
 import type { Bubble } from "./bubbles.ts";
 import type { TerrainMap } from "./terrain.ts";
 import type { CityLayout, BuildingLayout, HouseLayout } from "./layout.ts";
@@ -243,7 +244,9 @@ export class IsoCityScene {
     this.animManager = new IsoAnimationManager(
       this.actorsLayer,
       this.effectsLayer,
-      this.textureManager
+      this.textureManager,
+      app.renderer,
+      this.entitiesLayer
     );
   }
 
@@ -494,9 +497,11 @@ export class IsoCityScene {
       });
     }
 
-    // Sort entities front-to-back
+    // Sort entities front-to-back with depth sorting
+    this.entitiesLayer.sortableChildren = true;
     entityDisplayList.sort((a, b) => a.depth - b.depth);
     for (const item of entityDisplayList) {
+      item.container.zIndex = item.depth;
       this.entitiesLayer.addChild(item.container);
     }
 
@@ -516,6 +521,7 @@ export class IsoCityScene {
         gv.citizenCount * 6,
         openCount
       );
+      const mapBounds = getMapScreenBounds(terrain.size, terrain.size);
       this.animManager.setup(
         actors,
         smokeOrigins,
@@ -527,7 +533,19 @@ export class IsoCityScene {
         theme.building.chimneySmoke,
         theme.smokeThickness,
         theme.building.windowLit,
-        theme.windowGlowLevel
+        theme.windowGlowLevel,
+        {
+          seed: this.currentCityView?.stateRoot ?? arcId,
+          arcId,
+          roads: roadsToDraw,
+          buildings: layout.buildings,
+          houses: layout.houses,
+          population: gv.citizenCount * 6,
+          smokeOrigins,
+          sparkleOrigins: waterSprites.slice(0, 6).map((s) => ({ x: s.x, y: s.y })),
+          mapBounds,
+          allowMotion: this.allowMotion,
+        }
       );
     }
 
@@ -632,8 +650,10 @@ export class IsoCityScene {
   }
 
   private onTick = (): void => {
+    const isReduced = getReducedMotion() || !this.allowMotion;
+    const dt = Math.min(0.1, (this.app.ticker.deltaMS || 16.6) / 1000);
     if (this.allowMotion) {
-      if (this.popInTargets.length > 0) {
+      if (this.popInTargets.length > 0 && !isReduced) {
         for (let i = this.popInTargets.length - 1; i >= 0; i--) {
           const c = this.popInTargets[i];
           const next = c.scale.x + (1.0 - c.scale.x) * 0.25;
@@ -645,9 +665,9 @@ export class IsoCityScene {
           }
         }
       }
-      this.animManager.update();
+      this.animManager.update(dt, undefined, isReduced);
       this.weatherManager.update();
-      this.bubbleManager.tick(this.allowMotion);
+      this.bubbleManager.tick(!isReduced);
     }
   };
 

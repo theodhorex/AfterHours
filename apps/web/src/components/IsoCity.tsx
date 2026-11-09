@@ -97,6 +97,7 @@ export function IsoCity({
 
   const terrain = useMemo(() => generateTerrain(seed, activeCity.arc_id, 40), [seed, activeCity.arc_id]);
   const layout: CityLayout = useMemo(() => layoutCity(terrain, activeCity), [terrain, activeCity]);
+  const firstBuildRef = useRef(true);
   const layoutRef = useRef(layout);
   useEffect(() => { layoutRef.current = layout; }, [layout]);
 
@@ -251,15 +252,25 @@ export function IsoCity({
   const season = scrubStep !== null ? rawSeason : heldSeason;
   const bubbles = useMemo(() => bubblesFor(activeCity), [activeCity]);
 
+  // A different world needs its own opening frame.
+  useEffect(() => {
+    firstBuildRef.current = true;
+  }, [activeCity.arc_id]);
+
   useEffect(() => {
     if (!ready || !sceneRef.current) return;
     sceneRef.current.buildScene(
       terrain, layout, activeCity.arc_id, selectedRef.current,
       !prefersReducedMotion(), season, bubbles, growthView, overlayMode, activeCity
     );
-    const { x, y, zoom } = camRef.current;
-    sceneRef.current.setCamera(x, y, zoom);
-  }, [ready, terrain, layout, activeCity, season, bubbles, growthView, overlayMode]);
+    if (firstBuildRef.current) {
+      firstBuildRef.current = false;
+      recenter();
+    } else {
+      const { x, y, zoom } = camRef.current;
+      sceneRef.current.setCamera(x, y, zoom);
+    }
+  }, [ready, terrain, layout, activeCity, season, bubbles, growthView, overlayMode, recenter]);
 
   useEffect(() => {
     if (ready) sceneRef.current?.updateSelection(selectedIdx);
