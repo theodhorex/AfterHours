@@ -18,6 +18,9 @@ import {
   TestnetSummaryTable,
   type CityVerificationResult,
 } from "./TestnetSummaryTable.tsx";
+import { BookTabs } from "./ui/BookTabs.tsx";
+import { Icon } from "./ui/Icons.tsx";
+import { SealStamp } from "./ui/SealStamp.tsx";
 
 export type { CityVerificationResult };
 
@@ -114,191 +117,179 @@ export function TestnetAuditSection() {
     setIsVerifyingAll(false);
   }, [isVerifyingSingle, isVerifyingAll, runSingleVerification]);
 
+  const tabItems = TESTNET_CITY_IDS.map((cityId) => ({
+    value: cityId,
+    label: TESTNET_CITIES[cityId].name,
+    badge: TESTNET_CITIES[cityId].arcId,
+  }));
+
   return (
-    <div className="pt-4 border-t border-atlas-line space-y-4">
-      {/* Section Header & Official Copy */}
+    <div className="pt-6 border-t border-ledger-ink-faded/20 space-y-5">
+      {/* Section Header */}
       <div className="space-y-1.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-          <h3 className="text-sm font-display font-semibold text-atlas-ink flex items-center gap-2">
-            <span aria-hidden="true" className="text-atlas-gold">🌐</span>
-            Verify against NEAR testnet (4 Cities)
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h3 className="text-base sm:text-lg font-pixel font-bold text-ledger-ink flex items-center gap-2">
+            <Icon name="seal" size={18} className="text-ledger-ink-faded" aria-hidden="true" />
+            <span>Verify Against NEAR Testnet (4 Cities)</span>
           </h3>
-          <span className="font-mono text-xs text-atlas-ink-muted break-all">
+          <span className="font-mono text-xs text-ledger-ink-faded break-all">
             Contract:{" "}
             <a
               href={buildExplorerAccountUrl(TESTNET_CONTRACT_ID)}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-atlas-gold hover:underline selection:bg-atlas-gold selection:text-atlas-canvas"
+              className="text-ledger-ink font-semibold underline hover:text-ledger-brass transition-colors focus-visible:outline-2 focus-visible:outline-ledger-brass"
             >
               <code>{TESTNET_CONTRACT_ID}</code> ↗
             </a>
           </span>
         </div>
 
-        <p className="text-xs text-atlas-ink-muted leading-relaxed">
+        <p className="font-body text-xs sm:text-sm text-ledger-ink-faded leading-relaxed">
           4 cities, 200 steps, 5 checkpoints each published on contract{" "}
-          <code className="text-atlas-ink font-semibold">{TESTNET_CONTRACT_ID}</code>. Select any city to replay independently in your browser and compare the resulting state root against the on-chain smart contract.
+          <code className="text-ledger-ink font-semibold font-mono">{TESTNET_CONTRACT_ID}</code>. Select any city to replay independently in your browser and compare the resulting state root against the on-chain smart contract.
         </p>
       </div>
 
-      {/* 4-City Selector Tabs (Accessible & Keyboard Reachable, 360px safe) */}
+      {/* 4-City Selector Tabs: BookTabs style segmented control */}
       <div className="space-y-2">
-        <label id="city-selector-label" className="text-xs font-mono text-atlas-ink-muted block">
+        <label id="city-selector-label" className="text-xs font-silk text-ledger-ink-faded uppercase tracking-wider block">
           Select testnet city:
         </label>
-        <div
-          role="tablist"
-          aria-labelledby="city-selector-label"
-          className="flex flex-wrap gap-1.5 p-1 rounded-xs bg-atlas-surface-raised border border-atlas-line"
-        >
-          {TESTNET_CITY_IDS.map((cityId) => {
-            const city = TESTNET_CITIES[cityId];
-            const isSelected = selectedCityId === cityId;
-            return (
-              <button
-                key={cityId}
-                role="tab"
-                type="button"
-                id={`tab-${cityId}`}
-                aria-selected={isSelected}
-                aria-controls={`panel-${cityId}`}
-                tabIndex={isSelected ? 0 : -1}
-                onClick={() => {
-                  setSelectedCityId(cityId);
-                  setSingleResult(null);
-                }}
-                onKeyDown={(e) => {
-                  const currentIndex = TESTNET_CITY_IDS.indexOf(cityId);
-                  if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-                    e.preventDefault();
-                    const nextIdx = (currentIndex + 1) % TESTNET_CITY_IDS.length;
-                    const nextId = TESTNET_CITY_IDS[nextIdx];
-                    setSelectedCityId(nextId);
-                    setSingleResult(null);
-                    document.getElementById(`tab-${nextId}`)?.focus();
-                  } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-                    e.preventDefault();
-                    const prevIdx = (currentIndex - 1 + TESTNET_CITY_IDS.length) % TESTNET_CITY_IDS.length;
-                    const prevId = TESTNET_CITY_IDS[prevIdx];
-                    setSelectedCityId(prevId);
-                    setSingleResult(null);
-                    document.getElementById(`tab-${prevId}`)?.focus();
-                  }
-                }}
-                className={`atlas-focus px-3 py-2 rounded-xs font-mono text-xs transition-colors flex items-center gap-1.5 min-h-[44px] sm:min-h-fit cursor-pointer ${
-                  isSelected
-                    ? "bg-atlas-gold text-atlas-canvas font-bold border border-atlas-gold shadow-xs"
-                    : "bg-atlas-surface text-atlas-ink hover:text-atlas-gold border border-atlas-line/60"
-                }`}
-              >
-                <span>{city.name}</span>
-                <span className="text-[10px] opacity-80">({city.arcId})</span>
-              </button>
-            );
-          })}
-        </div>
+        <BookTabs
+          value={selectedCityId}
+          onChange={(newVal) => {
+            setSelectedCityId(newVal as TestnetCityId);
+            setSingleResult(null);
+          }}
+          tabs={tabItems}
+          ariaLabel="Testnet cities selector"
+          className="border border-ledger-ink-faded/30"
+        />
       </div>
 
       {/* Selected City Metadata Panel */}
       <div
-        id={`panel-${selectedCityId}`}
+        id={`book-panel-${selectedCityId}`}
         role="tabpanel"
-        aria-labelledby={`tab-${selectedCityId}`}
-        className="p-3 rounded-xs bg-atlas-surface border border-atlas-line/80 font-mono text-xs space-y-3"
+        aria-labelledby={`book-tab-${selectedCityId}`}
+        className="p-4 sm:p-5 border border-ledger-ink-faded/30 bg-ledger-paper-shade/20 space-y-4"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-atlas-line/50 pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ledger-ink-faded/20 pb-3 font-mono text-xs">
           <div>
-            <span className="text-atlas-ink font-semibold">{activeCity.name}</span>{" "}
-            <span className="text-atlas-ink-muted">({activeCity.cityId})</span>
+            <span className="font-body font-bold text-base text-ledger-ink">{activeCity.name}</span>{" "}
+            <span className="text-ledger-ink-faded">({activeCity.cityId})</span>
           </div>
-          <div className="text-atlas-gold">
-            Seed: <code>{activeCity.seed}</code> • Steps: <code>{activeCity.steps}</code>
+          <div className="text-ledger-ink-faded tabular-nums">
+            Seed: <code className="text-ledger-ink font-semibold">{activeCity.seed}</code> • Steps:{" "}
+            <code className="text-ledger-ink font-semibold">{activeCity.steps}</code>
           </div>
         </div>
 
         {/* Action Buttons: Verify Chosen City & Verify All Four */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleVerifySelected}
             disabled={isVerifyingSingle || isVerifyingAll}
-            className={`atlas-focus px-3.5 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 min-h-[44px] ${
+            className={`min-h-[44px] px-4 py-2.5 font-pixel text-xs cursor-pointer border transition-colors flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-ledger-brass ${
               isVerifyingSingle || isVerifyingAll
-                ? "bg-atlas-ash/20 text-atlas-ash border border-atlas-line cursor-not-allowed"
-                : "bg-atlas-gold text-atlas-canvas hover:bg-atlas-gold/90 border border-atlas-gold cursor-pointer"
+                ? "bg-ledger-paper-shade/40 text-ledger-ink-faded/60 border-ledger-ink-faded/20 cursor-not-allowed"
+                : "bg-ledger-paper text-ledger-ink font-bold border-ledger-ink shadow-[2px_2px_0_0_var(--ledger-ink)] hover:bg-ledger-paper-shade/60 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
             }`}
             aria-label={`Verify ${activeCity.name} against NEAR testnet`}
           >
-            {isVerifyingSingle ? (
-              <>
-                <span className="inline-block animate-spin" aria-hidden="true">⏳</span>
-                <span>Replaying 200 steps & verifying…</span>
-              </>
-            ) : (
-              <>
-                <span aria-hidden="true">⚡</span>
-                <span>Verify {activeCity.name}</span>
-              </>
-            )}
+            <Icon name="seal" size={16} aria-hidden="true" />
+            <span>Verify {activeCity.name}</span>
           </button>
 
           <button
             type="button"
             onClick={handleVerifyAllFour}
             disabled={isVerifyingSingle || isVerifyingAll}
-            className={`atlas-focus px-3.5 py-2 rounded-xs font-mono font-semibold text-xs transition-colors flex items-center gap-2 min-h-[44px] ${
+            className={`min-h-[44px] px-4 py-2.5 font-pixel text-xs cursor-pointer border transition-colors flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-ledger-brass ${
               isVerifyingSingle || isVerifyingAll
-                ? "bg-atlas-ash/20 text-atlas-ash border border-atlas-line cursor-not-allowed"
-                : "bg-atlas-surface-raised border border-atlas-gold text-atlas-gold hover:bg-atlas-gold/15 cursor-pointer"
+                ? "bg-ledger-paper-shade/40 text-ledger-ink-faded/60 border-ledger-ink-faded/20 cursor-not-allowed"
+                : "bg-ledger-paper-shade/40 text-ledger-ink border-ledger-ink-faded/40 hover:bg-ledger-paper-shade/70 active:translate-x-[1px] active:translate-y-[1px]"
             }`}
             aria-label="Verify all four testnet cities sequentially"
           >
-            {isVerifyingAll ? (
-              <>
-                <span className="inline-block animate-spin" aria-hidden="true">⏳</span>
-                <span>
-                  Verifying all ({allProgress?.current}/{allProgress?.total}: {allProgress?.cityName})…
-                </span>
-              </>
-            ) : (
-              <>
-                <span aria-hidden="true">🔍</span>
-                <span>Verify all four</span>
-              </>
-            )}
+            <Icon name="scale" size={16} aria-hidden="true" />
+            <span>Verify all four</span>
           </button>
         </div>
 
-        {/* Live Region for Single City Verification Result */}
-        <div aria-live="polite" role="status" aria-atomic="true">
+        {/* Determinate progress for Verify All or Single verification */}
+        {isVerifyingSingle && (
+          <div className="space-y-1.5" role="status" aria-live="polite">
+            <div className="flex items-center justify-between text-xs font-mono text-ledger-ink-faded">
+              <span>Replaying 200 steps & verifying {activeCity.name}…</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label={`Verifying ${activeCity.name}`}
+              className="w-full bg-ledger-paper-shade/60 border border-ledger-ink-faded/30 h-2 overflow-hidden"
+            >
+              <div className="bg-ledger-brass h-full w-2/3 transition-all duration-300 animate-pulse" />
+            </div>
+          </div>
+        )}
+
+        {isVerifyingAll && allProgress && (
+          <div className="space-y-1.5" role="status" aria-live="polite">
+            <div className="flex items-center justify-between text-xs font-mono text-ledger-ink-faded">
+              <span>
+                Verifying city {allProgress.current} of {allProgress.total}: {allProgress.cityName}…
+              </span>
+              <span>{Math.round((allProgress.current / allProgress.total) * 100)}%</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-valuenow={allProgress.current}
+              aria-valuemin={1}
+              aria-valuemax={allProgress.total}
+              aria-label="All testnet cities verification progress"
+              className="w-full bg-ledger-paper-shade/60 border border-ledger-ink-faded/30 h-2.5 overflow-hidden"
+            >
+              <div
+                className="bg-ledger-brass h-full transition-all duration-150"
+                style={{ width: `${Math.round((allProgress.current / allProgress.total) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Live Region for Single City Verification Result with SealStamp */}
+        <div aria-live="polite" role="status" aria-atomic="true" className="pt-2">
           {!singleResult && !isVerifyingSingle && (
-            <div className="text-[11px] text-atlas-ash italic">
+            <div className="font-body text-xs text-ledger-ink-faded italic">
               No comparison performed for {activeCity.name} yet. Click &quot;Verify {activeCity.name}&quot; above.
             </div>
           )}
           {singleResult && (
-            <div
-              className={`p-3 rounded-xs border space-y-1.5 ${
-                singleResult.ok
-                  ? "border-atlas-moss bg-atlas-moss/20 text-atlas-moss"
-                  : "border-atlas-alert bg-atlas-alert/20 text-atlas-alert"
-              }`}
-            >
-              <div className="font-bold flex items-center gap-1.5">
-                <span aria-hidden="true">{singleResult.ok ? "✓" : "✗"}</span>
-                <span>{singleResult.message}</span>
+            <div className="p-4 border border-ledger-ink-faded/30 bg-ledger-paper flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1.5 font-mono text-xs">
+                <div className="font-body font-bold text-sm text-ledger-ink">
+                  {singleResult.name}: {singleResult.message}
+                </div>
+                {singleResult.replayRoot && (
+                  <div className="text-[11px] text-ledger-ink-faded break-all">
+                    Browser replay root: <code className="text-ledger-ink font-semibold">{singleResult.replayRoot}</code> (step 200)
+                  </div>
+                )}
+                {singleResult.chainCity && (
+                  <div className="text-[11px] text-ledger-ink-faded break-all">
+                    NEAR testnet root: <code className="text-ledger-ink font-semibold">{singleResult.chainCity.state_root}</code> (step {singleResult.chainCity.step})
+                  </div>
+                )}
               </div>
-              {singleResult.replayRoot && (
-                <div className="text-[11px] text-atlas-ink break-all">
-                  Browser replay state_root: <code>{singleResult.replayRoot}</code> (step 200)
-                </div>
-              )}
-              {singleResult.chainCity && (
-                <div className="text-[11px] text-atlas-ink break-all">
-                  NEAR testnet state_root: <code>{singleResult.chainCity.state_root}</code> (step {singleResult.chainCity.step})
-                </div>
-              )}
+              <div className="shrink-0">
+                <SealStamp
+                  key={`testnet-${singleResult.cityId}-${singleResult.ok ? "verified" : "mismatch"}`}
+                  result={singleResult.ok ? "verified" : "mismatch"}
+                  label={singleResult.ok ? "TESTNET MATCH" : "ON-CHAIN DIVERGENCE"}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -307,8 +298,8 @@ export function TestnetAuditSection() {
         {allResults && <TestnetSummaryTable results={allResults} />}
 
         {/* Checkpoint Transactions Links for the Selected City */}
-        <div className="space-y-1.5 pt-2 border-t border-atlas-line/50">
-          <div className="text-[11px] font-mono text-atlas-ink-muted">
+        <div className="space-y-2 pt-3 border-t border-ledger-ink-faded/20">
+          <div className="font-silk text-[11px] uppercase tracking-wider text-ledger-ink-faded">
             {activeCity.name} on-chain checkpoint transactions (5 checkpoints):
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -318,14 +309,14 @@ export function TestnetAuditSection() {
                 href={buildExplorerTxUrl(cp.txId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="atlas-focus p-2 rounded-xs border border-atlas-line bg-atlas-surface-raised hover:border-atlas-gold hover:bg-atlas-gold/5 transition-colors font-mono text-xs flex flex-col justify-center gap-0.5 group min-h-[44px]"
+                className="min-h-[44px] p-2.5 border border-ledger-ink-faded/20 bg-ledger-paper-shade/30 hover:bg-ledger-paper-shade/70 transition-colors font-mono text-xs flex flex-col justify-center gap-0.5 group focus-visible:outline-2 focus-visible:outline-ledger-brass"
                 aria-label={`View ${activeCity.name} Checkpoint ${cp.index} (${cp.fromStep} to ${cp.toStep}) on NearBlocks`}
               >
-                <div className="flex items-center justify-between text-[11px] text-atlas-ink-muted">
-                  <span className="font-semibold text-atlas-gold">Checkpoint {cp.index}</span>
-                  <span>Steps {cp.fromStep}..{cp.toStep}</span>
+                <div className="flex items-center justify-between text-[11px] text-ledger-ink-faded">
+                  <span className="font-semibold text-ledger-ink">Checkpoint {cp.index}</span>
+                  <span className="tabular-nums">Steps {cp.fromStep}..{cp.toStep}</span>
                 </div>
-                <div className="text-[11px] text-atlas-ink font-mono truncate group-hover:text-atlas-gold">
+                <div className="text-[11px] text-ledger-ink-faded font-mono truncate group-hover:text-ledger-ink">
                   Tx: {cp.txId.slice(0, 10)}…{cp.txId.slice(-6)} ↗
                 </div>
               </a>
@@ -336,3 +327,5 @@ export function TestnetAuditSection() {
     </div>
   );
 }
+
+export default TestnetAuditSection;

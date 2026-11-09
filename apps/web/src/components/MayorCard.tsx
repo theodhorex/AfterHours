@@ -6,6 +6,8 @@ import {
   getMayorDecree,
   type MayorPortraitSpec,
 } from "../data/mayors.ts";
+import { LedgerPage } from "./ui/LedgerPage.tsx";
+import { Icon } from "./ui/Icons.tsx";
 
 interface MayorCardProps {
   arcId: string;
@@ -26,7 +28,7 @@ function ProceduralPortrait({
       role="img"
       aria-label={`Stylized procedural portrait of ${name}`}
       viewBox="0 0 100 100"
-      className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-atlas-gold/60 bg-atlas-surface shrink-0 shadow-inner"
+      className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-ledger-brass bg-ledger-paper-shade/30 shrink-0"
     >
       <rect width="100" height="100" fill={palette.background} />
 
@@ -78,8 +80,8 @@ function ProceduralPortrait({
       {/* Monocle for goblin */}
       {features.hasMonocle && (
         <>
-          <circle cx="41" cy="45" r="6" fill="none" stroke="#d4a24e" strokeWidth="1.5" />
-          <line x1="47" y1="45" x2="52" y2="58" stroke="#d4a24e" strokeWidth="1" />
+          <circle cx="41" cy="45" r="6" fill="none" stroke="#b88a2e" strokeWidth="1.5" />
+          <line x1="47" y1="45" x2="52" y2="58" stroke="#b88a2e" strokeWidth="1" />
         </>
       )}
 
@@ -116,7 +118,7 @@ function ProceduralPortrait({
       {features.mouthStyle === "bushy_beard" && (
         <path
           d="M 30 52 C 25 76, 40 92, 50 92 C 60 92, 75 76, 70 52 C 65 64, 35 64, 30 52 Z"
-          fill="#d4a24e"
+          fill="#b88a2e"
           stroke={palette.outline}
           strokeWidth="1.5"
         />
@@ -133,7 +135,7 @@ function ProceduralPortrait({
 
       {/* Elf Crown */}
       {features.hasCrown && (
-        <path d="M 30 32 L 38 20 L 50 28 L 62 20 L 70 32 Z" fill="#d4a24e" stroke={palette.outline} strokeWidth="1.5" />
+        <path d="M 30 32 L 38 20 L 50 28 L 62 20 L 70 32 Z" fill="#b88a2e" stroke={palette.outline} strokeWidth="1.5" />
       )}
     </svg>
   );
@@ -145,101 +147,114 @@ export function MayorCard({ arcId, cityYear }: MayorCardProps) {
   const decree = getMayorDecree(mayor, cityYear);
 
   return (
-    <section
-      aria-label={`Meme Mayor: ${mayor.name}`}
-      className="atlas-panel rounded-sm p-4 sm:p-5 border border-atlas-line/80 bg-atlas-surface/90 flex flex-col gap-3.5 shadow-sm"
-    >
-      {/* Header: Title badge and Cosmetic Disclaimer */}
-      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-atlas-line/60 pb-2.5">
-        <div className="flex items-center gap-2">
-          <span className="text-base" aria-hidden="true">🎖️</span>
-          <h2 className="text-sm font-display font-bold text-atlas-ink tracking-wide">
-            Civic Figurehead (Parody)
-          </h2>
-        </div>
-        <span className="text-[10px] font-mono text-atlas-ash italic">
-          Cosmetic: the mayor does not change the verified economy
+    <LedgerPage
+      title="Civic Figurehead & Proclamations"
+      headingLevel="h2"
+      headerRight={
+        <span className="font-mono text-xs text-ledger-ink-faded italic">
+          Cosmetic figurehead (unverified by chain)
         </span>
-      </div>
+      }
+    >
+      <div className="space-y-6">
+        {/* Profile Card: Framed Portrait + Name + Charisma */}
+        <div className="p-4 sm:p-5 border border-ledger-ink-faded/30 bg-ledger-paper-shade/20 flex flex-col sm:flex-row items-start gap-5">
+          <ProceduralPortrait spec={mayor.portraitSpec} name={mayor.name} />
 
-      {/* Profile: Procedural Portrait + Name + Charisma */}
-      <div className="flex items-start gap-3.5">
-        <ProceduralPortrait spec={mayor.portraitSpec} name={mayor.name} />
-
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex flex-wrap items-baseline gap-1.5">
-            <h3 className="font-display font-bold text-base sm:text-lg text-atlas-gold truncate">
-              {mayor.name}
-            </h3>
-          </div>
-          <p className="font-mono text-xs text-atlas-ink font-semibold">
-            {mayor.title}
-          </p>
-          <p className="text-xs text-atlas-ink-muted italic leading-snug">
-            &ldquo;{mayor.tagline}&rdquo;
-          </p>
-
-          {/* Charisma Meter (Text + Progress Bar for accessibility) */}
-          <div className="pt-1 space-y-1">
-            <div className="flex justify-between items-center text-xs font-mono">
-              <span className="text-atlas-ink-muted font-medium">✨ Charisma Rating:</span>
-              <strong className="text-atlas-gold">{mayor.charisma} / 100</strong>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div>
+              <h3 className="font-pixel text-lg sm:text-xl text-ledger-ink font-bold">
+                {mayor.name}
+              </h3>
+              <p className="font-body text-sm font-semibold text-ledger-ink">
+                {mayor.title}
+              </p>
+              <p className="font-body text-xs text-ledger-ink-faded italic mt-0.5">
+                &ldquo;{mayor.tagline}&rdquo;
+              </p>
             </div>
-            <div
-              role="progressbar"
-              aria-valuenow={mayor.charisma}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`Charisma level: ${mayor.charisma} out of 100`}
-              className="w-full h-2 rounded-xs bg-atlas-surface-raised border border-atlas-line overflow-hidden"
-            >
+
+            {/* Charisma Meter (Text + Progress Bar) */}
+            <div className="pt-1 space-y-1 max-w-xs">
+              <div className="flex justify-between items-center text-xs font-mono">
+                <span className="text-ledger-ink-faded">Charisma Rating:</span>
+                <strong className="text-ledger-ink tabular-nums">{mayor.charisma} / 100</strong>
+              </div>
               <div
-                className="h-full bg-atlas-gold transition-all duration-300"
-                style={{ width: `${mayor.charisma}%` }}
-              />
+                role="progressbar"
+                aria-valuenow={mayor.charisma}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`Charisma level: ${mayor.charisma} out of 100`}
+                className="w-full h-2 bg-ledger-paper-shade/60 border border-ledger-ink-faded/30 overflow-hidden"
+              >
+                <div
+                  className="h-full bg-ledger-brass transition-all duration-300"
+                  style={{ width: `${mayor.charisma}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Rotating Deterministic Decree from City Year */}
-      <div className="bg-atlas-surface-raised rounded-xs p-3 border border-atlas-line flex flex-col gap-1 text-xs">
-        <div className="flex items-center justify-between font-mono text-[11px] text-atlas-ink-muted">
-          <span>📜 Annual Proclamation (Year {Math.floor(cityYear)}):</span>
-          <span className="text-[10px] text-atlas-ash font-mono">Deterministic Rotation</span>
+        {/* Decree as a Notarized Letter */}
+        <div className="p-5 sm:p-6 border border-ledger-ink-faded/30 bg-ledger-paper space-y-4 shadow-[inset_0_0_12px_rgba(107,86,64,0.06)]">
+          <div className="flex items-center justify-between border-b border-ledger-ink-faded/20 pb-2.5 font-mono text-xs text-ledger-ink-faded">
+            <span className="font-silk uppercase tracking-wider text-[11px] text-ledger-ink font-bold flex items-center gap-1.5">
+              <Icon name="scroll" size={14} aria-hidden="true" />
+              <span>Official Mayoral Proclamation (Year {Math.floor(cityYear)})</span>
+            </span>
+            <span className="text-[10px] tabular-nums">Deterministic Rotation</span>
+          </div>
+
+          <blockquote className="font-body text-base sm:text-lg text-ledger-ink italic leading-relaxed pl-3 border-l-2 border-ledger-brass">
+            &ldquo;{decree}&rdquo;
+          </blockquote>
+
+          {/* Signature Line */}
+          <div className="pt-4 border-t border-ledger-ink-faded/20 flex flex-col items-end">
+            <div className="font-pixel text-xs text-ledger-ink font-bold tracking-wider">
+              {mayor.name}
+            </div>
+            <div className="font-body text-xs text-ledger-ink-faded italic">
+              {mayor.title}, City of {mayor.name.split(" ")[0]}
+            </div>
+          </div>
         </div>
-        <p className="text-atlas-ink font-sans font-medium text-xs leading-relaxed italic bg-atlas-canvas/60 p-2 rounded-xs border border-atlas-line/40">
-          &ldquo;{decree}&rdquo;
-        </p>
-      </div>
 
-      {/* Catchphrases Drawer Toggle */}
-      <div className="pt-1 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={() => setShowCatchphrases((prev) => !prev)}
-          aria-expanded={showCatchphrases}
-          aria-controls={`catchphrases-${mayor.id}`}
-          className="atlas-focus text-xs font-mono font-semibold text-atlas-ink-muted hover:text-atlas-gold py-1.5 px-2 rounded-xs bg-atlas-surface border border-atlas-line transition-colors flex items-center justify-between cursor-pointer min-h-[44px] sm:min-h-[32px]"
-        >
-          <span>💬 Campaign Catchphrases</span>
-          <span>{showCatchphrases ? "▲ Hide" : "▼ Show"}</span>
-        </button>
-
-        {showCatchphrases && (
-          <ul
-            id={`catchphrases-${mayor.id}`}
-            role="list"
-            className="space-y-1.5 text-xs text-atlas-ink-muted font-sans pl-2 border-l-2 border-atlas-gold/60"
+        {/* Catchphrases Drawer Toggle */}
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowCatchphrases((prev) => !prev)}
+            aria-expanded={showCatchphrases}
+            aria-controls={`catchphrases-${mayor.id}`}
+            className="min-h-[44px] w-full text-xs font-pixel text-ledger-ink py-2 px-3 border border-ledger-ink-faded/30 bg-ledger-paper-shade/30 hover:bg-ledger-paper-shade/60 transition-colors flex items-center justify-between cursor-pointer focus-visible:outline-2 focus-visible:outline-ledger-brass"
           >
-            {mayor.catchphrases.map((phrase, idx) => (
-              <li key={idx} className="leading-snug">
-                • &ldquo;{phrase}&rdquo;
-              </li>
-            ))}
-          </ul>
-        )}
+            <span className="flex items-center gap-2">
+              <Icon name="quill" size={14} aria-hidden="true" />
+              <span>Campaign Catchphrases ({mayor.catchphrases.length})</span>
+            </span>
+            <span className="font-mono text-xs">{showCatchphrases ? "[-]" : "[+]"}</span>
+          </button>
+
+          {showCatchphrases && (
+            <ul
+              id={`catchphrases-${mayor.id}`}
+              role="list"
+              className="space-y-2 p-3 border border-ledger-ink-faded/20 bg-ledger-paper-shade/10 font-body text-xs sm:text-sm text-ledger-ink italic"
+            >
+              {mayor.catchphrases.map((phrase, idx) => (
+                <li key={idx} className="leading-snug">
+                  &bull; &ldquo;{phrase}&rdquo;
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
-    </section>
+    </LedgerPage>
   );
 }
+
+export default MayorCard;
