@@ -7,14 +7,20 @@ import { stateToCityView } from "../lib/sim-view.ts";
 import { getArc, getPricingRules } from "../lib/sim-adapter.ts";
 import { generateTerrain } from "../lib/iso/terrain.ts";
 import { layoutCity, getStageIndex, type CityLayout } from "../lib/iso/layout.ts";
+import type { BuildingLayout, HouseLayout } from "../lib/iso/layout-types.ts";
 import { IsoCityScene } from "../lib/iso/render.ts";
 import { calculateFitCamera } from "../lib/iso/iso-math.ts";
 import { bubblesFor } from "../lib/iso/bubbles.ts";
-import {
-  computeGrowthView,
-  createReplaySnapshotStore,
-} from "../lib/iso/growth-view.ts";
+import { computeGrowthView, createReplaySnapshotStore } from "../lib/iso/growth-view.ts";
+import type { OverlayMode } from "../lib/city-report.ts";
 import { CityGrowthScrubber } from "./CityGrowthScrubber.tsx";
+import { HexA11yList } from "./HexA11yList.tsx";
+import { buildMapA11yItems } from "../lib/a11y/map-items.ts";
+import { MapInspector, type InspectedTarget } from "./MapInspector.tsx";
+import { MapHoverTooltip } from "./ui/MapHoverTooltip.tsx";
+import { MapZoomControls } from "./ui/MapZoomControls.tsx";
+import { MapOverlayControl } from "./ui/MapOverlayControl.tsx";
+import { CityReportStrip } from "./ui/CityReportStrip.tsx";
 
 export interface IsoCityProps {
   city: CityView;
@@ -22,13 +28,15 @@ export interface IsoCityProps {
   onSelectSector: (idx: number) => void;
   seed?: string;
   onScrubStep?: (step: number) => void;
+  onTryStrategy?: (kind: string, sectorIdx: number) => void;
+  strategyResult?: string | null;
 }
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3.0;
 
 function clampZoom(z: number): number {
-  const stepped = Math.round(z * 4) / 4; // integer-friendly 0.25 zoom steps
+  const stepped = Math.round(z * 4) / 4;
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, stepped));
 }
 
@@ -42,44 +50,29 @@ export function IsoCity({
   onSelectSector,
   seed = "goblin_seed_0",
   onScrubStep,
+  onTryStrategy,
+  strategyResult,
 }: IsoCityProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const sceneRef = useRef<IsoCityScene | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [triggerEl, setTriggerEl] = useState<HTMLElement | null>(null);
+  const [bounds, setBounds] = useState({ width: 800, height: 500 });
 
   const [scrubStep, setScrubStep] = useState<number | null>(null);
+  const [zoomLabel, setZoomLabel] = useState(100);
+  const [ready, setReady] = useState(false);
+  const [overlayMode, setOverlayMode] = useState<OverlayMode>("normal");
+  const [hoverBuilding, setHoverBuilding] = useState<{ building: BuildingLayout; level: number } | null>(null);
+  const [pointerPos, setPointerPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [inspectedTarget, setInspectedTarget] = useState<InspectedTarget | null>(null);
 
-  const snapshotStore = useMemo(() => {
-    return createReplaySnapshotStore(city.arc_id, seed);
-  }, [city.arc_id, seed]);
-
-  // Derived state at current scrub step or live simulation step
-  const activeStep = scrubStep ?? city.step;
-
-  const activeCity = useMemo(() => {
-    if (scrubStep === null || scrubStep === city.step) {
-      return city;
-    }
-    try {
-      const { state, stateRoot } = snapshotStore.getStateAtStep(scrubStep);
-      return stateToCityView(state, getArc(city.arc_id), getPricingRules(), {
-        stateRoot,
-      });
-    } catch {
-      return city;
-    }
-  }, [scrubStep, city, snapshotStore]);
-
-  // Camera lives in a ref: panning/zooming never triggers React renders or scene rebuilds.
   const camRef = useRef({ x: 0, y: 0, zoom: 1 });
   const dragRef = useRef<{ active: boolean; sx: number; sy: number; px: number; py: number }>({
     active: false, sx: 0, sy: 0, px: 0, py: 0,
   });
-  const [zoomLabel, setZoomLabel] = useState(100);
-  const [ready, setReady] = useState(false);
 
-  // Latest props for long-lived Pixi callbacks and effects without re-initializing the app.
   const onSelectRef = useRef(onSelectSector);
   const selectedRef = useRef(selectedIdx);
   useEffect(() => {
@@ -87,24 +80,25 @@ export function IsoCity({
     selectedRef.current = selectedIdx;
   }, [onSelectSector, selectedIdx]);
 
-  const { totalOpen, totalClosed } = useMemo(() => {
-    let open = 0;
-    let closed = 0;
-    for (const s of activeCity.sectors) {
-      for (const b of s.businesses) {
-        if (b.open && b.insolvent_steps === 0) open++;
-        else closed++;
-      }
+  const snapshotStore = useMemo(() => createReplaySnapshotStore(city.arc_id, seed), [city.arc_id, seed]);
+  const activeStep = scrubStep ?? city.step;
+
+  const activeCity = useMemo(() => {
+    if (scrubStep === null || scrubStep === city.step) return city;
+    try {
+      const { state, stateRoot } = snapshotStore.getStateAtStep(scrubStep);
+      return stateToCityView(state, getArc(city.arc_id), getPricingRules(), { stateRoot });
+    } catch {
+      return city;
     }
-    return { totalOpen: open, totalClosed: closed };
-  }, [activeCity.sectors]);
+  }, [scrubStep, city, snapshotStore]);
+
+  const mapItems = useMemo(() => buildMapA11yItems(activeCity), [activeCity]);
 
   const terrain = useMemo(() => generateTerrain(seed, activeCity.arc_id, 40), [seed, activeCity.arc_id]);
   const layout: CityLayout = useMemo(() => layoutCity(terrain, activeCity), [terrain, activeCity]);
   const layoutRef = useRef(layout);
-  useEffect(() => {
-    layoutRef.current = layout;
-  }, [layout]);
+  useEffect(() => { layoutRef.current = layout; }, [layout]);
 
   const growthView = useMemo(() => {
     return computeGrowthView({
@@ -115,12 +109,7 @@ export function IsoCity({
       step: activeCity.step,
       population: activeCity.citizens.population,
       businesses: activeCity.sectors.flatMap((s) =>
-        s.businesses.map((b) => ({
-          id: b.id,
-          sectorIdx: s.idx,
-          open: b.open,
-          insolvent: b.insolvent_steps > 0,
-        }))
+        s.businesses.map((b) => ({ id: b.id, sectorIdx: s.idx, open: b.open, insolvent: b.insolvent_steps > 0 }))
       ),
       roads: layout.roads,
       buildings: layout.buildings,
@@ -129,14 +118,10 @@ export function IsoCity({
     });
   }, [activeCity, layout]);
 
-  const builtPoints = useMemo(() => {
-    return [
-      layout.plaza,
-      ...layout.buildings.map((b) => ({ x: b.tileX, y: b.tileY })),
-      ...layout.houses.map((h) => ({ x: h.tileX, y: h.tileY })),
-      ...layout.sectors.map((s) => ({ x: s.centerX, y: s.centerY })),
-    ];
-  }, [layout]);
+  const viewRef = useRef({ activeCity, growthView });
+  useEffect(() => {
+    viewRef.current = { activeCity, growthView };
+  }, [activeCity, growthView]);
 
   const applyCamera = useCallback((x: number, y: number, zoom: number) => {
     camRef.current = { x, y, zoom };
@@ -148,32 +133,26 @@ export function IsoCity({
     const el = containerRef.current;
     const w = el?.clientWidth ?? 960;
     const h = el?.clientHeight ?? 540;
-    const cam = calculateFitCamera(builtPoints, {
-      viewportWidth: w,
-      viewportHeight: h,
-      padding: Math.max(32, Math.min(w * 0.08, 64)),
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
-    });
-    applyCamera(cam.x, cam.y, cam.zoom);
-  }, [builtPoints, applyCamera]);
+    const pts = [layout.plaza, ...layout.buildings.map((b) => ({ x: b.tileX, y: b.tileY }))];
+    const cam = calculateFitCamera(pts, { viewportWidth: w, viewportHeight: h, padding: 48, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM });
+    const zoom = Math.min(MAX_ZOOM, Math.round(cam.zoom * 1.6 * 4) / 4);
+    const cx = (w / 2 - cam.x) / cam.zoom;
+    const cy = (h / 2 - cam.y) / cam.zoom;
+    applyCamera(Math.round(w / 2 - cx * zoom), Math.round(h / 2 - cy * zoom), zoom);
+  }, [layout, applyCamera]);
 
-  // Zoom around the viewport center
-  const zoomBy = useCallback(
-    (delta: number) => {
-      const el = containerRef.current;
-      if (!el) return;
-      const { x, y, zoom } = camRef.current;
-      const next = clampZoom(zoom + delta);
-      const cx = el.clientWidth / 2;
-      const cy = el.clientHeight / 2;
-      const k = next / zoom;
-      applyCamera(cx - (cx - x) * k, cy - (cy - y) * k, next);
-    },
-    [applyCamera]
-  );
+  const zoomBy = useCallback((delta: number) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const { x, y, zoom } = camRef.current;
+    const next = clampZoom(zoom + delta);
+    const cx = el.clientWidth / 2;
+    const cy = el.clientHeight / 2;
+    const k = next / zoom;
+    applyCamera(cx - (cx - x) * k, cy - (cy - y) * k, next);
+  }, [applyCamera]);
 
-  // Create the Pixi app once; survives city updates. Handles React strict-mode double mount.
+  // Create Pixi app once
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -182,10 +161,7 @@ export function IsoCity({
     let observer: ResizeObserver | null = null;
     let scene: IsoCityScene | null = null;
 
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      zoomBy(e.deltaY > 0 ? -0.25 : 0.25);
-    };
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); zoomBy(e.deltaY > 0 ? -0.25 : 0.25); };
 
     (async () => {
       const a = new Application();
@@ -198,27 +174,54 @@ export function IsoCity({
         resolution: Math.min(window.devicePixelRatio || 1, 2),
         autoDensity: true,
       });
-      if (cancelled) {
-        a.destroy(true, { children: true });
-        return;
-      }
-      app = a;
-      appRef.current = a;
+      if (cancelled) { a.destroy(true, { children: true }); return; }
+      app = a; appRef.current = a;
       const canvas = a.canvas;
       canvas.className = "absolute inset-0 touch-none cursor-grab";
       canvasRef.current = canvas;
       container.appendChild(canvas);
       container.addEventListener("wheel", onWheel, { passive: false });
 
-      scene = new IsoCityScene(a, { onSelectSector: (i) => onSelectRef.current(i) });
+      scene = new IsoCityScene(a, {
+        onSelectSector: (i) => onSelectRef.current(i),
+        onHoverBuilding: (b) => {
+          if (!b) setHoverBuilding(null);
+          else {
+            const slot = viewRef.current.growthView.buildingSlots.find((s) => s.id === b.id);
+            setHoverBuilding({ building: b, level: slot ? slot.level : b.level });
+          }
+        },
+        onSelectBuilding: (b) => {
+          const sec = viewRef.current.activeCity.sectors.find((s) => s.idx === b.sectorIdx);
+          const slot = viewRef.current.growthView.buildingSlots.find((s) => s.id === b.id);
+          setInspectedTarget({
+            type: "building",
+            id: b.id,
+            name: b.name,
+            sectorIdx: b.sectorIdx,
+            sector: sec,
+            level: slot ? slot.level : b.level,
+            tileX: b.tileX,
+            tileY: b.tileY,
+          });
+        },
+        onSelectHouse: (h) => {
+          setInspectedTarget({
+            type: "house",
+            id: h.id,
+            level: h.level,
+            tileX: h.tileX,
+            tileY: h.tileY,
+            citizens: viewRef.current.activeCity.citizens,
+          });
+        },
+      });
       sceneRef.current = scene;
       a.stage.addChild(scene.root);
 
       observer = new ResizeObserver(() => {
         if (!app) return;
-        const w = Math.max(container.clientWidth, 200);
-        const h = Math.max(container.clientHeight, 200);
-        app.renderer.resize(w, h);
+        app.renderer.resize(Math.max(container.clientWidth, 200), Math.max(container.clientHeight, 200));
       });
       observer.observe(container);
       setReady(true);
@@ -232,49 +235,35 @@ export function IsoCity({
       scene?.destroy();
       sceneRef.current = null;
       canvasRef.current = null;
-      if (app) {
-        app.destroy(true, { children: true });
-        appRef.current = null;
-      }
+      if (app) { app.destroy(true, { children: true }); appRef.current = null; }
     };
   }, [applyCamera, zoomBy]);
 
-  // Rebuild scene when the world changes (new business, closure, stage, population) — app is kept.
-  const firstBuildRef = useRef(true);
-  const season = typeof activeCity.step === "number" ? ((activeCity.step % 4) + 4) % 4 : 0;
+  const rawSeason = typeof activeCity.step === "number" ? ((activeCity.step % 4) + 4) % 4 : 0;
+  const [heldSeason, setHeldSeason] = useState(rawSeason);
+  const rawSeasonRef = useRef(rawSeason);
+  useEffect(() => { rawSeasonRef.current = rawSeason; }, [rawSeason]);
+  useEffect(() => {
+    const id = setInterval(() => setHeldSeason(rawSeasonRef.current), 6000);
+    return () => clearInterval(id);
+  }, []);
+
+  const season = scrubStep !== null ? rawSeason : heldSeason;
   const bubbles = useMemo(() => bubblesFor(activeCity), [activeCity]);
+
   useEffect(() => {
     if (!ready || !sceneRef.current) return;
     sceneRef.current.buildScene(
-      terrain,
-      layout,
-      activeCity.arc_id,
-      selectedRef.current,
-      !prefersReducedMotion(),
-      season,
-      bubbles,
-      growthView
+      terrain, layout, activeCity.arc_id, selectedRef.current,
+      !prefersReducedMotion(), season, bubbles, growthView, overlayMode, activeCity
     );
-    if (firstBuildRef.current) {
-      firstBuildRef.current = false;
-      recenter();
-    } else {
-      const { x, y, zoom } = camRef.current;
-      sceneRef.current.setCamera(x, y, zoom);
-    }
-  }, [ready, terrain, layout, activeCity.arc_id, season, bubbles, growthView, recenter]);
+    const { x, y, zoom } = camRef.current;
+    sceneRef.current.setCamera(x, y, zoom);
+  }, [ready, terrain, layout, activeCity, season, bubbles, growthView, overlayMode]);
 
-  // Selection only redraws the highlight ring and label
   useEffect(() => {
     if (ready) sceneRef.current?.updateSelection(selectedIdx);
   }, [ready, selectedIdx]);
-
-  const a11ySummary = `${activeCity.name} isometric view, Year ${activeCity.year}, Season ${activeCity.season}. Population ${activeCity.citizens.population}. Stage: ${activeCity.stage_name}. ${totalOpen} active businesses, ${totalClosed} closed or insolvent. Era: ${growthView.patinaName}. Drag to pan or use zoom buttons.`;
-
-  useEffect(() => {
-    canvasRef.current?.setAttribute("role", "img");
-    canvasRef.current?.setAttribute("aria-label", a11ySummary);
-  }, [ready, a11ySummary]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     const { x, y } = camRef.current;
@@ -282,6 +271,11 @@ export function IsoCity({
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
   const handlePointerMove = (e: React.PointerEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPointerPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      setBounds((b) => (b.width === rect.width && b.height === rect.height ? b : { width: rect.width, height: rect.height }));
+    }
     const d = dragRef.current;
     if (!d.active) return;
     applyCamera(d.px + e.clientX - d.sx, d.py + e.clientY - d.sy, camRef.current.zoom);
@@ -289,99 +283,102 @@ export function IsoCity({
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!dragRef.current.active) return;
     dragRef.current.active = false;
-    try {
-      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-    } catch {
-      // already released
-    }
+    try { (e.target as HTMLElement).releasePointerCapture?.(e.pointerId); } catch { /* ignore */ }
   };
 
+  const handleOverlayModeChange = (mode: OverlayMode) => {
+    setOverlayMode(mode);
+    sceneRef.current?.setOverlayMode(mode, activeCity);
+  };
+
+  const hoveredSector = hoverBuilding
+    ? activeCity.sectors.find((s) => s.idx === hoverBuilding.building.sectorIdx)
+    : null;
 
   return (
-    <div className="atlas-panel rounded-sm p-3 sm:p-5 relative overflow-hidden space-y-4">
-      {/* Map Header & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-atlas-line pb-3">
-        <div>
-          <h2 className="text-base sm:text-lg font-display font-semibold text-atlas-ink flex items-center gap-2">
-            <span>Isometric Settlement View</span>
-            <span className="text-xs font-mono font-normal text-atlas-gold">
-              [{city.stage_name}]
-            </span>
-          </h2>
-          <p className="text-xs text-atlas-ink-muted">
-            Living city landscape. Drag to explore; click buildings or sectors to inspect.
-          </p>
+    <div className="relative space-y-3">
+      {/* Keyboard-accessible roving focus navigation */}
+      <HexA11yList
+        items={mapItems}
+        onSelectSector={onSelectSector}
+        onInspectSector={(idx, el) => {
+          setTriggerEl(el);
+          const sec = activeCity.sectors.find((s) => s.idx === idx);
+          const bldg = layout.buildings.find((b) => b.sectorIdx === idx);
+          if (sec && bldg) {
+            setInspectedTarget({
+              type: "building",
+              id: bldg.id,
+              name: bldg.name,
+              sectorIdx: idx,
+              sector: sec,
+              level: bldg.level,
+              tileX: bldg.tileX,
+              tileY: bldg.tileY,
+            });
+          }
+        }}
+      />
+
+      {/* Pixi Canvas Viewport */}
+      <div className="relative w-full overflow-hidden rounded border border-atlas-line bg-atlas-canvas">
+        <div
+          ref={containerRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="w-full relative h-[72vh] min-h-[460px] max-h-[820px] select-none"
+        />
+
+        {/* Camera Zoom & Recenter Toolbar */}
+        <div className="absolute right-3 top-3 z-10">
+          <MapZoomControls
+            zoomLabel={zoomLabel}
+            onZoomIn={() => zoomBy(0.25)}
+            onZoomOut={() => zoomBy(-0.25)}
+            onFit={recenter}
+            onRecenter={recenter}
+          />
         </div>
 
-        {/* Viewport Control Buttons */}
-        <div className="flex items-center gap-1.5 bg-atlas-canvas/80 p-1 rounded border border-atlas-line text-xs font-mono">
-          <button
-            type="button"
-            onClick={() => zoomBy(0.25)}
-            aria-label="Zoom in"
-            title="Zoom in"
-            className="atlas-focus px-2 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => zoomBy(-0.25)}
-            aria-label="Zoom out"
-            title="Zoom out"
-            className="atlas-focus px-2 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={() => recenter()}
-            aria-label="Fit built city to view"
-            title="Fit city in view"
-            className="atlas-focus px-2.5 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            onClick={() => recenter()}
-            aria-label="Recenter map view"
-            title="Recenter map"
-            className="atlas-focus px-2.5 py-1 rounded bg-atlas-surface-raised hover:bg-atlas-line text-atlas-ink hover:text-atlas-gold transition-colors"
-          >
-            Recenter
-          </button>
-          <span className="text-[10px] text-atlas-ash px-1">
-            {zoomLabel}%
-          </span>
-        </div>
+        {/* Hover Tooltip Card (Item 1) */}
+        {hoverBuilding && hoveredSector && !inspectedTarget && (
+          <MapHoverTooltip
+            sector={hoveredSector}
+            level={hoverBuilding.level}
+            pointerPos={pointerPos}
+            containerBounds={bounds}
+          />
+        )}
+
+        {/* Anchored Paper Inspection Card (Item 2) */}
+        <MapInspector
+          target={inspectedTarget}
+          onClose={() => setInspectedTarget(null)}
+          onOpenLedger={(idx) => {
+            setInspectedTarget(null);
+            onSelectSector(idx);
+          }}
+          onTryStrategy={(kind, idx) => {
+            onTryStrategy?.(kind, idx);
+          }}
+          strategyResult={strategyResult}
+          focusReturnElement={triggerEl}
+        />
+
+        <div aria-hidden="true" className="tiltshift tiltshift-top" />
+        <div aria-hidden="true" className="tiltshift tiltshift-bottom" />
+        <div aria-hidden="true" className="city-vignette" />
       </div>
 
-      {/* Offscreen keyboard reachable list of active bubbles */}
-      <div
-        role="region"
-        aria-label="Active city notification bubbles"
-        className="sr-only focus-within:not-sr-only focus-within:relative focus-within:z-10 focus-within:block focus-within:bg-atlas-surface-raised focus-within:p-3 focus-within:rounded focus-within:border focus-within:border-atlas-gold focus-within:space-y-2"
-      >
-        <h4 className="text-xs font-mono uppercase text-atlas-gold font-semibold">
-          Active Bubbles & Alerts (Select to inspect district)
-        </h4>
-        <div className="flex flex-wrap gap-2">
-          {bubbles.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              onClick={() => onSelectSector(b.sectorIdx)}
-              aria-label={b.ariaLabel}
-              className="atlas-focus text-xs font-mono px-2.5 py-1 rounded bg-atlas-surface border border-atlas-line hover:border-atlas-gold text-atlas-ink hover:text-atlas-gold transition-colors"
-            >
-              [{b.glyph.toUpperCase()}] {b.title}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Progress Overlay Switch & Legend (Item 3) */}
+      <MapOverlayControl mode={overlayMode} onChangeMode={handleOverlayModeChange} />
 
-      {/* 2500-Year Growth Timeline Scrubber & Age Stats Strip */}
+      {/* Compact City Report Strip (Item 3) */}
+      <CityReportStrip city={activeCity} />
+
+      {/* 2500-Year Growth Timeline Scrubber */}
       <CityGrowthScrubber
         currentStep={activeStep}
         maxStep={10000}
@@ -389,8 +386,8 @@ export function IsoCity({
         arcId={activeCity.arc_id}
         stageName={activeCity.stage_name}
         population={activeCity.citizens.population}
-        openBiz={totalOpen}
-        totalBiz={totalOpen + totalClosed}
+        openBiz={activeCity.sectors.flatMap((s) => s.businesses).filter((b) => b.open && b.insolvent_steps === 0).length}
+        totalBiz={activeCity.sectors.flatMap((s) => s.businesses).length}
         satisfaction={Math.round(activeCity.citizens.satisfaction_bps / 100)}
         patinaName={growthView.patinaName}
         onScrub={(target) => {
@@ -398,75 +395,6 @@ export function IsoCity({
           onScrubStep?.(target);
         }}
       />
-
-      {/* Pixi Canvas Viewport */}
-      <div
-        ref={containerRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        className="w-full relative aspect-[4/3] sm:aspect-[16/10] min-h-[420px] max-h-[640px] bg-atlas-canvas rounded overflow-hidden select-none border border-atlas-line"
-      />
-
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-mono text-atlas-ink-muted bg-atlas-canvas/60 px-3 py-2 rounded border border-atlas-line">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#42382c] border border-atlas-gold flex items-center justify-center text-[7px] text-atlas-gold">▪</span><span>House (Lit)</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-atlas-ember border border-atlas-gold" /><span>Landmark (Open)</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-atlas-alert/30 border border-atlas-alert flex items-center justify-center text-[8px] text-atlas-alert font-bold">✕</span><span>Ruined</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#5a5142] border border-[#363026]" /><span>Paved Road</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-[#265f7c] border border-[#64b4d6]" /><span>River & Shore</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#284720] border border-[#4c6632]" /><span>Trees</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-atlas-gold/80 border border-atlas-ink" /><span>Citizen / Cart</span></span>
-      </div>
-
-      {/* Keyboard-accessible sector list below canvas */}
-      <div
-        role="region"
-        aria-label="Districts and Sectors navigation"
-        className="space-y-2 pt-1"
-      >
-        <h3 className="text-xs font-mono uppercase tracking-wider text-atlas-ink font-semibold">
-          Municipal Districts (Keyboard Operable)
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {activeCity.sectors.map((sector) => {
-            const isSelected = sector.idx === selectedIdx;
-            const openBiz = sector.businesses.filter((b) => b.open && b.insolvent_steps === 0).length;
-            const closedBiz = sector.businesses.length - openBiz;
-
-            return (
-              <button
-                key={sector.idx}
-                type="button"
-                onClick={() => onSelectSector(sector.idx)}
-                aria-pressed={isSelected}
-                className={`atlas-focus text-left p-2 rounded transition-all border ${
-                  isSelected
-                    ? "bg-atlas-gold/15 border-atlas-gold text-atlas-ink shadow-xs"
-                    : "bg-atlas-surface/80 border-atlas-line hover:border-atlas-line-strong text-atlas-ink-muted hover:text-atlas-ink"
-                }`}
-              >
-                <div className="flex items-center justify-between text-[10px] font-mono">
-                  <span className={isSelected ? "text-atlas-gold font-bold" : "text-atlas-ash"}>
-                    Sec {sector.idx}
-                  </span>
-                  <span className="text-[9px] uppercase">{sector.kind}</span>
-                </div>
-                <div className="font-display font-semibold text-xs truncate mt-0.5">
-                  {sector.name}
-                </div>
-                <div className="text-[10px] font-mono mt-1 text-atlas-ink-muted">
-                  <span>{openBiz} open</span>
-                  {closedBiz > 0 && (
-                    <span className="text-atlas-alert ml-1">({closedBiz} closed)</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }

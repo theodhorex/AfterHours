@@ -8,8 +8,10 @@ import {
   Container,
   Sprite,
   Graphics,
+  Texture,
   type Application,
 } from "pixi.js";
+import { bakeGround } from "./ground-bake.ts";
 import { isoToScreen, depthSortKey, isClick, getTileVariant } from "./iso-math.ts";
 import { IsoTextureManager } from "./sprites.ts";
 import { IsoAnimationManager, generateActors } from "./animation.ts";
@@ -18,14 +20,18 @@ import { getTheme, type ThemeTokens } from "./theme.ts";
 import { drawDistrictHighlights, makeBuildingBadge, BubblePoolManager } from "./render-ui.ts";
 import type { Bubble } from "./bubbles.ts";
 import type { TerrainMap } from "./terrain.ts";
-import type { CityLayout, BuildingLayout } from "./layout.ts";
+import type { CityLayout, BuildingLayout, HouseLayout } from "./layout.ts";
+import type { CityView } from "../sim-view.ts";
+import { getOverlayBadge, type OverlayMode } from "../city-report.ts";
 import { computeGrowthView, type GrowthViewResult } from "./growth-view.ts";
 import { getCenturyMonumentSpec } from "./growth-render-pure.ts";
 import { drawCenturyMonument } from "./monument.ts";
 
 export interface IsoSceneCallbacks {
   onSelectSector?: (sectorIdx: number) => void;
-  onHoverBuilding?: (b: BuildingLayout | null) => void;
+  onHoverBuilding?: (b: BuildingLayout | null, screenPos?: { x: number; y: number }) => void;
+  onSelectBuilding?: (b: BuildingLayout, screenPos?: { x: number; y: number }) => void;
+  onSelectHouse?: (h: HouseLayout, screenPos?: { x: number; y: number }) => void;
 }
 
 export interface TreePlacement {
@@ -163,6 +169,7 @@ export class IsoCityScene {
   private effectsLayer = new Container();
   private weatherManager = new IsoWeatherManager();
   private bubbleManager: BubblePoolManager;
+  private overlayLayer = new Container();
   private uiLayer = new Container();
 
   private textureManager: IsoTextureManager;
@@ -173,6 +180,8 @@ export class IsoCityScene {
   private currentArcId = "";
   private currentSeason = 0;
   private currentTheme: ThemeTokens | null = null;
+  private currentCityView: CityView | null = null;
+  private overlayMode: OverlayMode = "normal";
   private selectedIdx = 0;
   private app: Application;
   private callbacks: IsoSceneCallbacks;
@@ -182,6 +191,37 @@ export class IsoCityScene {
   private selBadge: Container | null = null;
   private knownBuildingIds = new Set<string>();
   private popInTargets: Container[] = [];
+  private groundSprite: Sprite | null = null;
+  private groundCache = new WeakMap<TerrainMap, Map<string, Texture>>();
+  private groundOrigin = { x: 0, y: 0 };
+
+  private groundTexture(terrain: TerrainMap, theme: ThemeTokens, arcId: string, season: number): Texture {
+    let perTerrain = this.groundCache.get(terrain);
+    if (!perTerrain) {
+      perTerrain = new Map();
+      this.groundCache.set(terrain, perTerrain);
+    }
+    const key = `${arcId}|${season}`;
+    let tex = perTerrain.get(key);
+    if (!tex) {
+      const baked = bakeGround(terrain, theme, arcId, season);
+      this.groundOrigin = { x: baked.originX, y: baked.originY };
+      tex = Texture.from(baked.canvas);
+      tex.source.scaleMode = "nearest";
+      perTerrain.set(key, tex);
+      (tex as Texture & { __origin?: { x: number; y: number } }).__origin = this.groundOrigin;
+    }
+    return tex;
+  }
+
+  private positionGround(arcId: string, terrain: TerrainMap): void {
+    void arcId;
+    void terrain;
+    const spr = this.groundSprite;
+    if (!spr) return;
+    const origin = (spr.texture as Texture & { __origin?: { x: number; y: number } }).__origin ?? this.groundOrigin;
+    spr.position.set(origin.x, origin.y);
+  }
 
   constructor(app: Application, callbacks: IsoSceneCallbacks = {}) {
     this.app = app;
@@ -197,6 +237,7 @@ export class IsoCityScene {
       this.effectsLayer,
       this.bubbleManager.layer,
       this.weatherManager.layer,
+      this.overlayLayer,
       this.uiLayer
     );
     this.animManager = new IsoAnimationManager(
@@ -219,8 +260,12 @@ export class IsoCityScene {
     allowMotion: boolean,
     season = 0,
     bubbles: Bubble[] = [],
-    growthView?: GrowthViewResult
+    growthView?: GrowthViewResult,
+    overlayMode: OverlayMode = "normal",
+    cityView?: CityView
   ): void {
+    if (overlayMode) this.overlayMode = overlayMode;
+    if (cityView) this.currentCityView = cityView;
     // If only season changed on the exact same layout and arc and growthView, swap tints and weather smoothly
     if (
       this.currentTerrain === terrain &&
@@ -265,25 +310,13 @@ export class IsoCityScene {
       plaza: layout.plaza,
     });
 
-    // 1. Ground tiles with nearest-neighbour scaling and roundPixels
-    for (let y = 0; y < terrain.size; y++) {
-      for (let x = 0; x < terrain.size; x++) {
-        const kind = terrain.tiles[y][x];
-        const variant = getTileVariant(x, y, 3);
-        const tex = tm.getTileTexture(kind, arcId, variant, 0, season);
-        const spr = new Sprite(tex);
-        spr.roundPixels = true;
-        const scr = isoToScreen(x, y);
-        spr.position.set(scr.x, scr.y);
-        spr.anchor.set(0.5, 0.44);
-        spr.eventMode = "none";
-        this.groundLayer.addChild(spr);
-
-        if (kind === "water" && this.allowMotion) {
-          waterSprites.push(spr);
-        }
-      }
-    }
+    // 1. Ground: one baked pixel-art texture for the whole terrain (cached per terrain, arc, season)
+    this.groundSprite = new Sprite(this.groundTexture(terrain, theme, arcId, season));
+    this.groundSprite.roundPixels = true;
+    this.groundSprite.eventMode = "none";
+    this.positionGround(arcId, terrain);
+    this.groundLayer.addChild(this.groundSprite);
+    void waterSprites;
 
     // 2. Road tiles with edge lines & connection masks (growing from center outward)
     const roadsToDraw = gv.builtRoads;
@@ -345,6 +378,27 @@ export class IsoCityScene {
 
       const c = new Container();
       c.addChild(spr);
+      c.eventMode = "static";
+      c.cursor = "pointer";
+
+      let hDownPos = { x: 0, y: 0 };
+      c.on("pointerdown", (e) => {
+        hDownPos = { x: e.global.x, y: e.global.y };
+      });
+      c.on("pointerup", (e) => {
+        const dx = e.global.x - hDownPos.x;
+        const dy = e.global.y - hDownPos.y;
+        if (isClick(dx, dy, 4)) {
+          this.callbacks.onSelectHouse?.(h, { x: scr.x, y: scr.y });
+        }
+      });
+      c.on("pointerenter", () => {
+        spr.position.y -= 2;
+      });
+      c.on("pointerleave", () => {
+        spr.position.y += 2;
+      });
+
       entityDisplayList.push({
         container: c,
         depth: depthSortKey(h.tileX, h.tileY, 1),
@@ -396,15 +450,18 @@ export class IsoCityScene {
         const dy = e.global.y - downPos.y;
         if (isClick(dx, dy, 4)) {
           this.callbacks.onSelectSector?.(b.sectorIdx);
+          this.callbacks.onSelectBuilding?.(b, { x: scr.x, y: scr.y });
         }
       });
 
       bContainer.on("pointerenter", () => {
-        this.callbacks.onHoverBuilding?.(b);
+        spr.position.y -= 2;
+        this.callbacks.onHoverBuilding?.(b, { x: scr.x, y: scr.y });
         this.showHoverLabel(b, scr.x, scr.y, sec?.name ?? "District");
       });
 
       bContainer.on("pointerleave", () => {
+        spr.position.y += 2;
         this.callbacks.onHoverBuilding?.(null);
         this.hideHoverLabel();
       });
@@ -483,6 +540,9 @@ export class IsoCityScene {
     // 7c. Record known buildings for future pop-ins
     this.knownBuildingIds = new Set(layout.buildings.map((b) => b.id));
 
+    // 7d. Update overlay progress badges
+    this.updateOverlayBadges(this.overlayMode, this.currentCityView);
+
     // 8. Manage ticker
     if (this.allowMotion && !this.tickerRunning) {
       this.app.ticker.add(this.onTick);
@@ -499,6 +559,10 @@ export class IsoCityScene {
     const theme = getTheme(this.currentArcId, season);
     this.currentTheme = theme;
     this.root.tint = theme.ambientTint;
+    if (this.groundSprite && this.currentTerrain) {
+      this.groundSprite.texture = this.groundTexture(this.currentTerrain, theme, this.currentArcId, season);
+      this.positionGround(this.currentArcId, this.currentTerrain);
+    }
     this.weatherManager.setWeather(theme.weather, theme, allowMotion);
     if (bubbles && this.currentLayout) {
       this.bubbleManager.update(bubbles, this.currentLayout);
@@ -520,6 +584,37 @@ export class IsoCityScene {
         this.selBadge = makeBuildingBadge(b, scr.x, scr.y, sec?.name ?? "District");
         this.uiLayer.addChild(this.selBadge);
       }
+    }
+  }
+
+  public setOverlayMode(mode: OverlayMode, cityView?: CityView): void {
+    this.overlayMode = mode;
+    if (cityView) this.currentCityView = cityView;
+    this.updateOverlayBadges(mode, this.currentCityView);
+  }
+
+  public updateOverlayBadges(mode: OverlayMode, cityView?: CityView | null): void {
+    this.overlayLayer.removeChildren();
+    if (!this.currentLayout) return;
+
+    for (const b of this.currentLayout.buildings) {
+      const sector = cityView?.sectors?.find((s) => s.idx === b.sectorIdx);
+      if (!sector) continue;
+      const badge = getOverlayBadge(mode, sector);
+      const scr = isoToScreen(b.tileX, b.tileY);
+      const bx = scr.x;
+      const by = scr.y - 48;
+      const g = new Graphics();
+      if (badge.shape === "circle") {
+        g.circle(bx, by, 5.5).fill({ color: badge.color }).stroke({ color: 0x12100e, width: 1.5 });
+      } else if (badge.shape === "square") {
+        g.rect(bx - 4.5, by - 4.5, 9, 9).fill({ color: badge.color }).stroke({ color: 0x12100e, width: 1.5 });
+      } else if (badge.shape === "diamond") {
+        g.poly([bx, by - 6, bx + 6, by, bx, by + 6, bx - 6, by]).fill({ color: badge.color }).stroke({ color: 0x12100e, width: 1.5 });
+      } else {
+        g.poly([bx, by - 6, bx + 6, by + 4, bx - 6, by + 4]).fill({ color: badge.color }).stroke({ color: 0x12100e, width: 1.5 });
+      }
+      this.overlayLayer.addChild(g);
     }
   }
 
@@ -564,6 +659,7 @@ export class IsoCityScene {
     this.entitiesLayer.removeChildren();
     this.actorsLayer.removeChildren();
     this.effectsLayer.removeChildren();
+    this.overlayLayer.removeChildren();
     for (const child of this.uiLayer.removeChildren()) child.destroy({ children: true });
     this.hoverBadge = null;
     this.selBadge = null;
