@@ -135,6 +135,17 @@ export const PRESET_AGENTS: Record<string, string> = {
   ),
 };
 
+/**
+ * Maps a municipal sector kind to an appropriate preset agent rule.
+ */
+export function sectorKindToPresetKey(kind: string): string {
+  const k = (kind || "").toLowerCase();
+  if (k === "food") return "flour-trader";
+  if (k === "forge" || k === "ore") return "crystal-flipper";
+  if (k === "alchemy" || k === "tower") return "grain-hoarder";
+  return "flour-trader";
+}
+
 function canonicalizeJson(val: unknown): unknown {
   if (val === null || typeof val !== "object") {
     return val;
