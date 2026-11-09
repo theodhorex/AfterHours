@@ -14,6 +14,17 @@
   --atlas-arcane: #b89df5;
   --atlas-alert: #f26868;
   --atlas-ash: #968a7a;
+
+  /* Ledger Design System tokens */
+  --ledger-night: #17121a;
+  --ledger-twilight: #2c2233;
+  --ledger-paper: #f1e4c8;
+  --ledger-paper-shade: #e3d1ac;
+  --ledger-ink: #2a1d14;
+  --ledger-ink-faded: #6b5640;
+  --ledger-wax: #b3392b;
+  --ledger-verdigris: #2f7a6b;
+  --ledger-brass: #b88a2e;
 }
 
 @theme inline {
@@ -31,9 +42,21 @@
   --color-atlas-alert: var(--atlas-alert);
   --color-atlas-ash: var(--atlas-ash);
 
+  --color-ledger-night: var(--ledger-night);
+  --color-ledger-twilight: var(--ledger-twilight);
+  --color-ledger-paper: var(--ledger-paper);
+  --color-ledger-paper-shade: var(--ledger-paper-shade);
+  --color-ledger-ink: var(--ledger-ink);
+  --color-ledger-ink-faded: var(--ledger-ink-faded);
+  --color-ledger-wax: var(--ledger-wax);
+  --color-ledger-verdigris: var(--ledger-verdigris);
+  --color-ledger-brass: var(--ledger-brass);
+
   --font-display: var(--font-cinzel), Georgia, serif;
   --font-body: var(--font-alegreya), Garamond, Georgia, serif;
   --font-mono: var(--font-jb-mono), ui-monospace, monospace;
+  --font-pixel: var(--font-pixel), monospace;
+  --font-silk: var(--font-silk), monospace;
 }
 
 @layer base {
@@ -94,4 +117,165 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ==========================================================================
+   Ledger Design System (Atlas Notaris)
+   ========================================================================== */
+
+/* Typography utility classes */
+.font-pixel {
+  font-family: var(--font-pixel), monospace;
+}
+.font-silk {
+  font-family: var(--font-silk), monospace;
+}
+
+/* Plain-text display toggle */
+html[data-font="plain"] h1,
+html[data-font="plain"] h2,
+html[data-font="plain"] h3,
+html[data-font="plain"] h4,
+html[data-font="plain"] .font-display,
+html[data-font="plain"] .font-pixel,
+html[data-font="plain"] .font-silk {
+  font-family: var(--font-alegreya), Garamond, Georgia, serif !important;
+}
+
+/* Paper chrome: Ledger Page with ruled lines, static SVG grain, notched corners */
+.ledger-page {
+  position: relative;
+  background-color: var(--ledger-paper);
+  color: var(--ledger-ink);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 23px,
+    rgba(107, 86, 64, 0.14) 23px,
+    rgba(107, 86, 64, 0.14) 24px
+  );
+  clip-path: polygon(
+    8px 0%,
+    calc(100% - 8px) 0%,
+    100% 8px,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    8px 100%,
+    0% calc(100% - 8px),
+    0% 8px
+  );
+  filter: drop-shadow(0 4px 14px rgba(23, 18, 26, 0.45));
+}
+
+.ledger-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.08;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  z-index: 0;
+}
+
+/* Hard pixel-style border for dark HUD chrome edges */
+.ledger-chrome {
+  position: relative;
+  background-color: var(--ledger-night);
+  color: var(--ledger-paper);
+  box-shadow:
+    0 -2px 0 0 var(--ledger-night),
+    0 2px 0 0 var(--ledger-night),
+    -2px 0 0 0 var(--ledger-night),
+    2px 0 0 0 var(--ledger-night),
+    inset 0 0 0 2px var(--ledger-twilight);
+}
+
+/* Brass focus ring complying with WCAG AA on paper and on night */
+.ledger-page :focus-visible,
+.ledger-chrome :focus-visible,
+.ledger-focus:focus-visible {
+  outline: 2px solid var(--ledger-brass);
+  outline-offset: 2px;
+}
+
+/* Stamp animations & reduced-motion disables */
+@keyframes ledger-stamp-land {
+  0% {
+    transform: scale(1.6);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ledger-stamp-jitter {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-2px);
+  }
+  40% {
+    transform: translateX(2px);
+  }
+  60% {
+    transform: translateX(-1px);
+  }
+  80% {
+    transform: translateX(1px);
+  }
+}
+
+.ledger-stamp-land {
+  animation: ledger-stamp-land 150ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.ledger-stamp-jitter {
+  animation: ledger-stamp-jitter 250ms ease-out forwards;
+}
+
+/* Reduced motion explicitly disabling stamp and tick animations */
+@media (prefers-reduced-motion: reduce) {
+  .ledger-stamp-land,
+  .ledger-stamp-jitter,
+  .ledger-tick-anim {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* Tilt-shift depth of field over the city canvas: blur fades in toward the top and bottom edges. */
+.tiltshift {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 24%;
+  pointer-events: none;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.tiltshift-top {
+  top: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+.tiltshift-bottom {
+  bottom: 0;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+}
+.city-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 46%, transparent 52%, rgba(14, 10, 20, 0.38) 100%),
+    linear-gradient(180deg, rgba(255, 226, 170, 0.06), transparent 40%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .tiltshift { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

@@ -68,6 +68,56 @@ export function CityGrowthScrubber({
     onScrub(nextStep);
   };
 
+  const handleSliderKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    let nextStep: number | null = null;
+    switch (e.key) {
+      case "ArrowLeft":
+      case "ArrowDown":
+        e.preventDefault();
+        nextStep = Math.max(0, currentStep - 1);
+        break;
+      case "ArrowRight":
+      case "ArrowUp":
+        e.preventDefault();
+        nextStep = Math.min(maxStep, currentStep + 1);
+        break;
+      case "PageDown":
+        e.preventDefault();
+        nextStep = Math.max(0, currentStep - 4);
+        break;
+      case "PageUp":
+        e.preventDefault();
+        nextStep = Math.min(maxStep, currentStep + 4);
+        break;
+      case "Home":
+        e.preventDefault();
+        nextStep = 0;
+        break;
+      case "End":
+        e.preventDefault();
+        nextStep = maxStep;
+        break;
+      default:
+        return;
+    }
+    if (nextStep !== null) {
+      onScrub(nextStep);
+    }
+  };
+
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // If click directly targeted the input element, native onChange handles it
+    if (e.target !== e.currentTarget && (e.target as HTMLElement).tagName === "INPUT") {
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    const targetStep = Math.round(ratio * maxStep);
+    onScrub(targetStep);
+  };
+
   return (
     <section
       aria-label="City Age and Timeline Scrubber"
@@ -130,21 +180,30 @@ export function CityGrowthScrubber({
           </span>
         </div>
 
-        <input
-          id="city-timeline-slider"
-          type="range"
-          min={0}
-          max={maxStep}
-          step={1}
-          value={currentStep}
-          onChange={(e) => onScrub(Number(e.target.value))}
-          aria-label="Simulation timeline scrubber"
-          aria-valuemin={0}
-          aria-valuemax={maxStep}
-          aria-valuenow={currentStep}
-          aria-valuetext={`${stats.yearLabel}, Season ${stats.seasonName}, ${stats.stageName}`}
-          className="w-full h-2.5 bg-atlas-canvas rounded-lg appearance-none cursor-pointer accent-atlas-gold focus:outline-hidden focus:ring-2 focus:ring-atlas-gold"
-        />
+        {/* 44px minimum touch/click target container operating track click without dragging */}
+        <div
+          role="presentation"
+          onClick={handleTrackClick}
+          className="relative flex items-center min-h-[44px] cursor-pointer py-1"
+        >
+          <input
+            id="city-timeline-slider"
+            type="range"
+            role="slider"
+            min={0}
+            max={maxStep}
+            step={1}
+            value={currentStep}
+            onChange={(e) => onScrub(Number(e.target.value))}
+            onKeyDown={handleSliderKeyDown}
+            aria-label="Simulation timeline scrubber"
+            aria-valuemin={0}
+            aria-valuemax={maxStep}
+            aria-valuenow={currentStep}
+            aria-valuetext={`Year ${year}, ${stats.seasonName}`}
+            className="w-full h-3 min-h-[44px] bg-atlas-canvas rounded-lg appearance-none cursor-pointer accent-atlas-gold focus:outline-hidden focus:ring-2 focus:ring-atlas-gold"
+          />
+        </div>
 
         {/* Milestone ticks */}
         <div
