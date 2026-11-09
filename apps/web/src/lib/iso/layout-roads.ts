@@ -1,6 +1,8 @@
 /**
  * Deterministic road graph & sidewalk generator per arc flavour.
- * Generates main avenues, district lanes, bridges, junctions, and sidewalks.
+ * Enforces calm road density (12-18% cap at largest stage, less earlier),
+ * single connected component, straight avenues with branches, no 2-wide carpets,
+ * and monotonic growth across stages.
  */
 
 import type { TerrainMap, TileKind } from "./terrain.ts";
@@ -22,6 +24,14 @@ interface PathNode {
   dir?: number;
 }
 
+function dist(x1: number, y1: number, x2: number, y2: number): number {
+  return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+}
+
+/**
+ * A* pathfinding that prioritizes reusing existing roads, penalizes turns,
+ * and strongly penalizes running parallel/adjacent to existing roads.
+ */
 function findRoadPath(
   startX: number,
   startY: number,
@@ -30,14 +40,13 @@ function findRoadPath(
   terrain: TerrainMap,
   existingRoads: Map<string, RoadTile>,
   arcId: string,
-  rng: PRNG
+  reserved?: Set<string>
 ): Array<{ x: number; y: number }> | null {
   const size = terrain.size;
   const isGrid = arcId === "cave_hold" || arcId === "dino_vale";
   const openSet: PathNode[] = [];
   const closedSet = new Set<string>();
   const nodeMap = new Map<string, PathNode>();
-  const dist = (x1: number, y1: number, x2: number, y2: number) => Math.abs(x1 - x2) + Math.abs(y1 - y2);
 
   const startNode: PathNode = { x: startX, y: startY, g: 0, f: dist(startX, startY, targetX, targetY) };
   openSet.push(startNode);
@@ -73,13 +82,32 @@ function findRoadPath(
 
       const tk: TileKind = terrain.tiles[ny][nx];
       if (tk === "rock") continue;
+      if (reserved?.has(nKey) && !(nx === targetX && ny === targetY)) continue;
 
-      let cost = tk === "water" ? 18 : existingRoads.has(nKey) ? 0.3 : 2;
-      if (isGrid) {
-        if (current.dir !== undefined && current.dir !== d) cost += 3.0;
-        if (nx % 4 === 0 || ny % 4 === 0) cost -= 0.5;
-      } else if (rng.nextInt(0, 100) < 25) {
-        cost += 0.8;
+      let cost = 2.0;
+      if (existingRoads.has(nKey)) {
+        cost = 0.15; // Strongly prefer reusing existing roads
+      } else if (tk === "water") {
+        cost = 22.0; // Bridges only when necessary
+      } else {
+        // Penalize tiles adjacent to existing roads to prevent parallel side-by-side streets
+        let parallelCount = 0;
+        for (let od = 0; od < 4; od++) {
+          const onx = nx + dxs[od];
+          const ony = ny + dys[od];
+          if (existingRoads.has(`${onx},${ony}`) && (onx !== current.x || ony !== current.y)) {
+            parallelCount++;
+          }
+        }
+        if (parallelCount > 0) cost += 4.5 * parallelCount;
+      }
+
+      // Turn penalty creates straight, readable streets
+      if (current.dir !== undefined && current.dir !== d) {
+        cost += isGrid ? 2.5 : 1.5;
+      }
+      if (isGrid && (nx % 4 === 0 || ny % 4 === 0)) {
+        cost -= 0.3;
       }
 
       const tentativeG = current.g + cost;
@@ -95,6 +123,31 @@ function findRoadPath(
   return null;
 }
 
+/**
+ * Checks if placing a road at (x, y) would complete any 2x2 square of road tiles.
+ */
+function forms2x2(x: number, y: number, roadMap: Map<string, RoadTile>): boolean {
+  const corners = [
+    [ [1, 0], [0, 1], [1, 1] ],
+    [ [-1, 0], [0, 1], [-1, 1] ],
+    [ [1, 0], [0, -1], [1, -1] ],
+    [ [-1, 0], [0, -1], [-1, -1] ],
+  ];
+  for (const [[dx1, dy1], [dx2, dy2], [dx3, dy3]] of corners) {
+    if (
+      roadMap.has(`${x + dx1},${y + dy1}`) &&
+      roadMap.has(`${x + dx2},${y + dy2}`) &&
+      roadMap.has(`${x + dx3},${y + dy3}`)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Carves an A* road path, strictly avoiding 2-wide carpets and observing budget caps.
+ */
 function carveRoad(
   startX: number,
   startY: number,
@@ -104,25 +157,123 @@ function carveRoad(
   roadMap: Map<string, RoadTile>,
   arcId: string,
   kind: "main" | "branch" | "lane" | "path",
-  rng: PRNG,
-  reserved?: Set<string>
+  reserved: Set<string>,
+  maxBudget: number
 ): Array<{ x: number; y: number }> {
-  const path = findRoadPath(startX, startY, targetX, targetY, terrain, roadMap, arcId, rng);
+  const path = findRoadPath(startX, startY, targetX, targetY, terrain, roadMap, arcId, reserved);
   if (!path) return [];
   const carved: Array<{ x: number; y: number }> = [];
 
   for (let i = 0; i < path.length; i++) {
+    if (roadMap.size >= maxBudget) break;
     const pt = path[i];
     const key = `${pt.x},${pt.y}`;
-    if (reserved?.has(key) || (i === path.length - 1 && pt.x === targetX && pt.y === targetY)) continue;
+    if (reserved.has(key) && pt.x === targetX && pt.y === targetY) continue;
     if (terrain.tiles[pt.y][pt.x] === "rock") continue;
 
     if (!roadMap.has(key)) {
+      if (forms2x2(pt.x, pt.y, roadMap)) continue;
       roadMap.set(key, { x: pt.x, y: pt.y, isBridge: terrain.tiles[pt.y][pt.x] === "water", kind });
       carved.push(pt);
     }
   }
   return carved;
+}
+
+/**
+ * Carves a straight street branch of at least 2 tiles starting from an existing road tile.
+ */
+function carveBranch(
+  fromX: number,
+  fromY: number,
+  dx: number,
+  dy: number,
+  length: number,
+  terrain: TerrainMap,
+  roadMap: Map<string, RoadTile>,
+  reserved: Set<string>,
+  maxBudget: number
+): void {
+  for (let s = 1; s <= length; s++) {
+    if (roadMap.size >= maxBudget) break;
+    const bx = fromX + dx * s;
+    const by = fromY + dy * s;
+    const bk = `${bx},${by}`;
+    if (bx < 1 || bx >= terrain.size - 1 || by < 1 || by >= terrain.size - 1) break;
+    if (terrain.tiles[by][bx] === "rock" || reserved.has(bk)) break;
+    if (forms2x2(bx, by, roadMap)) break;
+    if (!roadMap.has(bk)) {
+      roadMap.set(bk, { x: bx, y: by, isBridge: terrain.tiles[by][bx] === "water", kind: "lane" });
+    }
+  }
+}
+
+/**
+ * Ensures only the connected component reachable from plaza is kept.
+ */
+function pruneDisconnected(roadMap: Map<string, RoadTile>, plaza: { x: number; y: number }): void {
+  let startKey: string | null = null;
+  let minD = Infinity;
+  for (const [k, r] of roadMap.entries()) {
+    const d = Math.abs(r.x - plaza.x) + Math.abs(r.y - plaza.y);
+    if (d < minD) {
+      minD = d;
+      startKey = k;
+    }
+  }
+  if (!startKey) return;
+
+  const connected = new Set<string>();
+  const queue = [startKey];
+  connected.add(startKey);
+
+  while (queue.length > 0) {
+    const [cx, cy] = queue.shift()!.split(",").map(Number);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nk = `${cx + dx},${cy + dy}`;
+      if (roadMap.has(nk) && !connected.has(nk)) {
+        connected.add(nk);
+        queue.push(nk);
+      }
+    }
+  }
+
+  for (const k of Array.from(roadMap.keys())) {
+    if (!connected.has(k)) {
+      roadMap.delete(k);
+    }
+  }
+}
+
+/**
+ * Prunes 1-tile dead-end spurs from junctions that do not touch landmarks.
+ */
+function pruneSpurs(roadMap: Map<string, RoadTile>, anchors: Array<{ x: number; y: number }>): void {
+  const landmarkSet = new Set(anchors.map((a) => `${a.x},${a.y}`));
+  for (const [k, r] of Array.from(roadMap.entries())) {
+    if (r.kind === "main") continue;
+    const neighbors: string[] = [];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nk = `${r.x + dx},${r.y + dy}`;
+      if (roadMap.has(nk)) neighbors.push(nk);
+    }
+    if (neighbors.length === 1) {
+      let touchesLandmark = false;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (landmarkSet.has(`${r.x + dx},${r.y + dy}`)) touchesLandmark = true;
+      }
+      if (!touchesLandmark) {
+        const [nx, ny] = neighbors[0].split(",").map(Number);
+        let nDeg = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (roadMap.has(`${nx + dx},${ny + dy}`)) nDeg++;
+        }
+        if (nDeg >= 3) {
+          roadMap.delete(k);
+        }
+      }
+    }
+  }
 }
 
 export function generateRoadNetwork(
@@ -132,13 +283,31 @@ export function generateRoadNetwork(
   arcId: string,
   stageIndex: number
 ): RoadNetworkResult {
-  const rng = createRng(`${arcId}_roads_stg${stageIndex}_${plaza.x}_${plaza.y}`);
   const roadMap = new Map<string, RoadTile>();
   const mainRoadTiles = new Set<string>();
   const reserved = new Set<string>(anchors.map((a) => `${a.x},${a.y}`));
   reserved.add(`${plaza.x},${plaza.y}`);
 
-  // 1. Central Plaza Hub (ring around plaza)
+  // Count buildable land to establish strict stage budgets (12-18% cap at largest stage)
+  let landCount = 0;
+  for (let y = 0; y < terrain.size; y++) {
+    for (let x = 0; x < terrain.size; x++) {
+      const t = terrain.tiles[y][x];
+      if (t !== "water" && t !== "rock") landCount++;
+    }
+  }
+
+  // Budget ceilings per stage
+  const stageBudgets = [
+    Math.floor(landCount * 0.07),  // Stage 0: ~5-7% (hamlet)
+    Math.floor(landCount * 0.10),  // Stage 1: ~7-10% (village)
+    Math.floor(landCount * 0.13),  // Stage 2: ~10-13% (town)
+    Math.floor(landCount * 0.15),  // Stage 3: ~13-15% (city)
+    Math.floor(landCount * 0.175), // Stage 4: ~15-17.5% (grand city, strictly <= 18%)
+  ];
+  const maxBudget = stageBudgets[Math.min(4, Math.max(0, stageIndex))];
+
+  // 1. STAGE 0: Central Plaza Hub (1-tile-wide ring around plaza)
   const hubRing = [
     { x: plaza.x - 1, y: plaza.y }, { x: plaza.x + 1, y: plaza.y },
     { x: plaza.x, y: plaza.y - 1 }, { x: plaza.x, y: plaza.y + 1 },
@@ -150,132 +319,128 @@ export function generateRoadNetwork(
       const tk = terrain.tiles[pt.y][pt.x];
       const k = `${pt.x},${pt.y}`;
       if (tk !== "rock" && !reserved.has(k)) {
-        roadMap.set(k, { x: pt.x, y: pt.y, isBridge: tk === "water", kind: stageIndex === 0 ? "path" : "main" });
+        roadMap.set(k, { x: pt.x, y: pt.y, isBridge: tk === "water", kind: "main" });
         mainRoadTiles.add(k);
       }
     }
   }
 
-  // Elf Grove special ring
-  if (arcId === "elf_grove") {
-    const ringOffsets = [
-      { x: -2, y: -1 }, { x: -2, y: 0 }, { x: -2, y: 1 }, { x: 2, y: -1 }, { x: 2, y: 0 }, { x: 2, y: 1 },
-      { x: -1, y: -2 }, { x: 0, y: -2 }, { x: 1, y: -2 }, { x: -1, y: 2 }, { x: 0, y: 2 }, { x: 1, y: 2 },
-    ];
-    for (const off of ringOffsets) {
-      const rx = plaza.x + off.x;
-      const ry = plaza.y + off.y;
-      if (rx >= 1 && rx < terrain.size - 1 && ry >= 1 && ry < terrain.size - 1) {
-        const tk = terrain.tiles[ry][rx];
-        const k = `${rx},${ry}`;
-        if (tk !== "rock" && !reserved.has(k)) {
-          roadMap.set(k, { x: rx, y: ry, isBridge: tk === "water", kind: "lane" });
-          mainRoadTiles.add(k);
-        }
-      }
-    }
-  }
+  // Radial main avenues from plaza hub to district landmarks
+  const districtRoads: Array<{ x: number; y: number; sectorIdx: number }> = [];
+  const avenueMidpoints: Array<{ x: number; y: number }> = [];
 
-  // 2. Main avenues from plaza hub to each district landmark
-  const roadKind: "main" | "path" = stageIndex === 0 ? "path" : "main";
   for (const anchor of anchors) {
-    let startX = plaza.x;
-    let startY = plaza.y;
+    let bestStart = hubRing[0];
     let minD = Infinity;
     for (const pt of hubRing) {
-      const d = Math.abs(pt.x - anchor.x) + Math.abs(pt.y - anchor.y);
+      const d = dist(pt.x, pt.y, anchor.x, anchor.y);
       if (d < minD && roadMap.has(`${pt.x},${pt.y}`)) {
         minD = d;
-        startX = pt.x;
-        startY = pt.y;
+        bestStart = pt;
       }
     }
 
-    const carved = carveRoad(startX, startY, anchor.x, anchor.y, terrain, roadMap, arcId, roadKind, rng, reserved);
+    const carved = carveRoad(bestStart.x, bestStart.y, anchor.x, anchor.y, terrain, roadMap, arcId, "main", reserved, maxBudget);
     for (const pt of carved) mainRoadTiles.add(`${pt.x},${pt.y}`);
+    if (carved.length > 3) {
+      avenueMidpoints.push(carved[Math.floor(carved.length / 2)]);
+    }
 
-    // Ensure landmark connectivity
+    // Ensure direct adjacency to landmark
     const adjs = [
       { x: anchor.x + 1, y: anchor.y }, { x: anchor.x - 1, y: anchor.y },
       { x: anchor.x, y: anchor.y + 1 }, { x: anchor.x, y: anchor.y - 1 },
     ];
-    if (!adjs.some((p) => roadMap.has(`${p.x},${p.y}`))) {
+    let touched = adjs.find((p) => roadMap.has(`${p.x},${p.y}`));
+    if (!touched) {
       for (const ap of adjs) {
         if (ap.x >= 1 && ap.x < terrain.size - 1 && ap.y >= 1 && ap.y < terrain.size - 1) {
           if (terrain.tiles[ap.y][ap.x] !== "rock") {
-            carveRoad(startX, startY, ap.x, ap.y, terrain, roadMap, arcId, roadKind, rng, reserved);
-            if (roadMap.has(`${ap.x},${ap.y}`)) break;
+            const extra = carveRoad(bestStart.x, bestStart.y, ap.x, ap.y, terrain, roadMap, arcId, "main", reserved, maxBudget);
+            for (const pt of extra) mainRoadTiles.add(`${pt.x},${pt.y}`);
+            if (roadMap.has(`${ap.x},${ap.y}`)) {
+              touched = ap;
+              break;
+            }
           }
         }
       }
     }
-
-    // District local street grid forming blocks
-    const armLen = stageIndex === 0 ? 3 : 5;
-    carveRoad(anchor.x - armLen, anchor.y, anchor.x + armLen, anchor.y, terrain, roadMap, arcId, "lane", rng, reserved);
-    carveRoad(anchor.x, anchor.y - armLen, anchor.x, anchor.y + armLen, terrain, roadMap, arcId, "lane", rng, reserved);
-
-    const span = stageIndex === 0 ? 2 : 3;
-    carveRoad(anchor.x - armLen, anchor.y - span, anchor.x + armLen, anchor.y - span, terrain, roadMap, arcId, "lane", rng, reserved);
-    carveRoad(anchor.x - armLen, anchor.y + span, anchor.x + armLen, anchor.y + span, terrain, roadMap, arcId, "lane", rng, reserved);
-    carveRoad(anchor.x - span, anchor.y - armLen, anchor.x - span, anchor.y + armLen, terrain, roadMap, arcId, "lane", rng, reserved);
-    carveRoad(anchor.x + span, anchor.y - armLen, anchor.x + span, anchor.y + armLen, terrain, roadMap, arcId, "lane", rng, reserved);
-
-    if (stageIndex >= 1) {
-      const midX = Math.floor((startX + anchor.x) / 2);
-      const midY = Math.floor((startY + anchor.y) / 2);
-      carveRoad(midX - 3, midY, midX + 3, midY, terrain, roadMap, arcId, "lane", rng, reserved);
-      carveRoad(midX, midY - 3, midX, midY + 3, terrain, roadMap, arcId, "lane", rng, reserved);
-    }
+    if (touched) districtRoads.push({ x: touched.x, y: touched.y, sectorIdx: anchor.sectorIdx });
   }
 
-  // 3. Inter-district connections & Arc Flavour
+  // 2. STAGE 1: Village District Street Wings & Primary Inter-District Links
   if (stageIndex >= 1) {
-    for (let i = 0; i < anchors.length; i++) {
-      const a1 = anchors[i];
-      const a2 = anchors[(i + 1) % anchors.length];
-      if (stageIndex >= 2 || i % 2 === 0) {
-        carveRoad(a1.x, a1.y, a2.x, a2.y, terrain, roadMap, arcId, "lane", rng, reserved);
+    for (const dr of districtRoads) {
+      for (const { dx, dy } of [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }]) {
+        carveBranch(dr.x, dr.y, dx, dy, 3, terrain, roadMap, reserved, maxBudget);
       }
     }
-
-    if (arcId === "cave_hold") {
-      for (let off = -8; off <= 8; off += 8) {
-        if (off !== 0 && plaza.y + off >= 2 && plaza.y + off < terrain.size - 2) {
-          carveRoad(plaza.x - 10, plaza.y + off, plaza.x + 10, plaza.y + off, terrain, roadMap, arcId, "lane", rng, reserved);
-        }
-      }
-    } else if (arcId === "dino_vale") {
-      const extraTiles: Array<{ x: number; y: number }> = [];
-      for (const r of Array.from(roadMap.values())) {
-        if (r.kind === "main" && !r.isBridge && (r.x + r.y) % 2 === 0) {
-          const ex = r.x + 1;
-          if (ex < terrain.size - 1 && terrain.tiles[r.y][ex] !== "rock" && terrain.tiles[r.y][ex] !== "water") {
-            const k = `${ex},${r.y}`;
-            if (!roadMap.has(k) && !reserved.has(k)) extraTiles.push({ x: ex, y: r.y });
-          }
-        }
-      }
-      for (const pt of extraTiles) {
-        roadMap.set(`${pt.x},${pt.y}`, { x: pt.x, y: pt.y, isBridge: false, kind: "main" });
-        mainRoadTiles.add(`${pt.x},${pt.y}`);
-      }
+    if (districtRoads.length >= 6) {
+      carveRoad(districtRoads[0].x, districtRoads[0].y, districtRoads[1].x, districtRoads[1].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
+      carveRoad(districtRoads[2].x, districtRoads[2].y, districtRoads[5].x, districtRoads[5].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
     }
   }
 
-  // 4. Junctions, Crosswalks, Lamps
+  // 3. STAGE 2: Town Inner Ring & Midpoint Residential Streets
+  if (stageIndex >= 2) {
+    if (districtRoads.length >= 6) {
+      carveRoad(districtRoads[1].x, districtRoads[1].y, districtRoads[4].x, districtRoads[4].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
+      carveRoad(districtRoads[3].x, districtRoads[3].y, districtRoads[4].x, districtRoads[4].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
+      carveRoad(districtRoads[0].x, districtRoads[0].y, districtRoads[2].x, districtRoads[2].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
+      carveRoad(districtRoads[5].x, districtRoads[5].y, districtRoads[3].x, districtRoads[3].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
+    }
+    for (const mp of avenueMidpoints) {
+      carveBranch(mp.x, mp.y, 1, 0, 3, terrain, roadMap, reserved, maxBudget);
+      carveBranch(mp.x, mp.y, -1, 0, 3, terrain, roadMap, reserved, maxBudget);
+    }
+  }
+
+  // 4. STAGE 3: City Midpoint Cross Streets & Secondary Residential Blocks
+  if (stageIndex >= 3) {
+    for (const mp of avenueMidpoints) {
+      carveBranch(mp.x, mp.y, 0, 1, 3, terrain, roadMap, reserved, maxBudget);
+      carveBranch(mp.x, mp.y, 0, -1, 3, terrain, roadMap, reserved, maxBudget);
+    }
+    for (const dr of districtRoads) {
+      carveBranch(dr.x, dr.y, 1, 0, 4, terrain, roadMap, reserved, maxBudget);
+      carveBranch(dr.x, dr.y, -1, 0, 4, terrain, roadMap, reserved, maxBudget);
+    }
+  }
+
+  // 5. STAGE 4: Grand City Outer Perimeter Boulevards (capped strictly at maxBudget)
+  if (stageIndex >= 4) {
+    if (districtRoads.length >= 6) {
+      carveRoad(districtRoads[1].x, districtRoads[1].y, districtRoads[3].x, districtRoads[3].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
+      carveRoad(districtRoads[4].x, districtRoads[4].y, districtRoads[5].x, districtRoads[5].y, terrain, roadMap, arcId, "lane", reserved, maxBudget);
+    }
+    for (const dr of districtRoads) {
+      carveBranch(dr.x, dr.y, 0, 1, 4, terrain, roadMap, reserved, maxBudget);
+      carveBranch(dr.x, dr.y, 0, -1, 4, terrain, roadMap, reserved, maxBudget);
+    }
+  }
+
+  // 6. Pruning and Cleanup: ensure single connected component and no short spurs
+  pruneDisconnected(roadMap, plaza);
+  pruneSpurs(roadMap, anchors);
+
+  // 7. Junctions, Crosswalks, Lamps
   for (const r of Array.from(roadMap.values())) {
     let degree = 0;
     const nbs = [{ x: r.x + 1, y: r.y }, { x: r.x - 1, y: r.y }, { x: r.x, y: r.y + 1 }, { x: r.x, y: r.y - 1 }];
-    for (const n of nbs) if (roadMap.has(`${n.x},${n.y}`)) degree++;
+    for (const n of nbs) {
+      if (roadMap.has(`${n.x},${n.y}`)) degree++;
+    }
     if (degree >= 3) {
       r.isJunction = true;
       if (stageIndex >= 1) r.hasCrosswalk = true;
     }
-    if (r.kind === "main" && (r.x + r.y) % 3 === 0 && !r.isBridge) r.hasLamp = true;
+    if (r.kind === "main" && (r.x + r.y) % 3 === 0 && !r.isBridge) {
+      r.hasLamp = true;
+    }
   }
 
-  // 5. Sidewalk strips (stage >= 1)
+  // 8. Sidewalk strips (stage >= 1)
   const sidewalks: SidewalkTile[] = [];
   const sidewalkSet = new Set<string>();
 

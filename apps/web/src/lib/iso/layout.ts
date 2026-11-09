@@ -41,11 +41,11 @@ export type {
  */
 export function getStageIndex(stageId: string): number {
   const s = (stageId || "").toLowerCase();
-  if (s.includes("hamlet") || s.includes("genesis") || s === "0") return 0;
-  if (s.includes("village") || s.includes("settlement") || s === "1") return 1;
-  if (s.includes("town") || s === "2") return 2;
-  if (s.includes("grand") || s === "4") return 4;
-  if (s.includes("city") || s.includes("metropolis") || s === "3") return 3;
+  if (s.includes("hamlet") || s.includes("genesis") || s.includes("camp") || s === "0") return 0;
+  if (s.includes("village") || s.includes("settlement") || s.includes("clan_hold") || s.includes("enclosure") || s.includes("haven") || s === "1") return 1;
+  if (s.includes("town") || s.includes("stronghold") || s === "2") return 2;
+  if (s.includes("city") || s.includes("metropolis") || s.includes("citadel") || s.includes("sanctuary") || s === "3") return 3;
+  if (s.includes("grand") || s.includes("high_hold") || s.includes("apex_vale") || s.includes("high_grove") || s === "4") return 4;
   return 1;
 }
 
