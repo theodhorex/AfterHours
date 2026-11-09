@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Header } from "../../components/Header.tsx";
 import { DistrictDetail } from "../../components/DistrictDetail.tsx";
 import { MarketPanel } from "../../components/MarketPanel.tsx";
+import { CityStatsPanel } from "../../components/CityStatsPanel.tsx";
 import { ChronicleList } from "../../components/ChronicleList.tsx";
 import { SimulationControls } from "../../components/SimulationControls.tsx";
 import { AuditPanel } from "../../components/AuditPanel.tsx";
@@ -243,6 +244,7 @@ export default function CityViewPage() {
               ariaLabel="City ledger pages"
               tabs={[
                 { value: "market", label: "Market", icon: <Icon name="coin" size={16} /> },
+                { value: "stats", label: "Stats", icon: <Icon name="bread" size={16} /> },
                 { value: "district", label: "District", icon: <Icon name="anvil" size={16} /> },
                 { value: "chronicle", label: "Chronicle", icon: <Icon name="scroll" size={16} /> },
                 { value: "audit", label: "Audit", icon: <Icon name="seal" size={16} /> },
@@ -258,6 +260,7 @@ export default function CityViewPage() {
               className="bg-atlas-canvas p-3 sm:p-5"
             >
               {bookTab === "market" && <MarketPanel items={cityView.market} />}
+              {bookTab === "stats" && <CityStatsPanel city={cityView} />}
               {bookTab === "district" && selectedSector && <DistrictDetail sector={selectedSector} />}
               {bookTab === "chronicle" && <ChronicleList events={cityView.chronicle} />}
               {bookTab === "audit" && (
