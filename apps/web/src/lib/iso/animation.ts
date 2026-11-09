@@ -4,10 +4,12 @@
  * Everything is pre-allocated and pooled — ZERO per-frame allocations.
  */
 
-import { Container, Sprite, Graphics } from "pixi.js";
+import { Container, Sprite, Graphics, type Renderer } from "pixi.js";
 import { TILE_HEIGHT, TILE_WIDTH } from "./iso-math.ts";
 import type { RoadTile } from "./layout.ts";
 import type { IsoTextureManager } from "./sprites.ts";
+import { LifeSystem, type SetupCityOptions } from "./life-system.ts";
+import type { ViewportBounds } from "./life-ambient.ts";
 
 export interface ActorDef {
   id: string;
@@ -184,15 +186,25 @@ export class IsoAnimationManager {
   private actorsLayer: Container;
   private effectsLayer: Container;
   private textureManager: IsoTextureManager;
+  private lifeSystem?: LifeSystem;
 
   constructor(
     actorsLayer: Container,
     effectsLayer: Container,
-    textureManager: IsoTextureManager
+    textureManager: IsoTextureManager,
+    renderer?: Renderer,
+    entitiesLayer?: Container
   ) {
     this.actorsLayer = actorsLayer;
     this.effectsLayer = effectsLayer;
     this.textureManager = textureManager;
+    if (renderer) {
+      this.lifeSystem = new LifeSystem({
+        renderer,
+        entitiesLayer: entitiesLayer ?? actorsLayer,
+        effectsLayer,
+      });
+    }
   }
 
   public setup(
@@ -206,7 +218,8 @@ export class IsoAnimationManager {
     smokeColor = 0xbda88e,
     smokeThickness = 1.0,
     glowColor = 0xf59e0b,
-    glowLevel = 1.0
+    glowLevel = 1.0,
+    lifeOptions?: SetupCityOptions
   ): void {
     this.clear();
     this.trees = trees;
@@ -222,69 +235,55 @@ export class IsoAnimationManager {
       this.glows.push(g);
     }
 
-    // 1. Pre-allocate and pool actor sprites with roundPixels
-    for (const def of actors) {
-      const tex = def.isCart
-        ? this.textureManager.getCartTexture(arcId)
-        : this.textureManager.getCitizenTexture(arcId);
-      const spr = new Sprite(tex);
-      spr.anchor.set(0.5, 0.85);
-      spr.roundPixels = true;
-      this.actorsLayer.addChild(spr);
-      this.actorSprites.push({ spr, def });
-    }
+    if (this.lifeSystem && lifeOptions) {
+      this.lifeSystem.setupCity(lifeOptions);
+    } else {
+      for (const def of actors) {
+        const tex = def.isCart ? this.textureManager.getCartTexture(arcId) : this.textureManager.getCitizenTexture(arcId);
+        const spr = new Sprite(tex);
+        spr.anchor.set(0.5, 0.85);
+        spr.roundPixels = true;
+        this.actorsLayer.addChild(spr);
+        this.actorSprites.push({ spr, def });
+      }
 
-    // 2. Pre-allocate and pool smoke particles for workshops & chimneys
-    for (const origin of smokeOrigins) {
-      for (let i = 0; i < 2; i++) {
-        const radius = Math.max(1.5, 2 * smokeThickness);
-        const g = new Graphics().circle(0, 0, radius).fill({ color: smokeColor, alpha: 0.5 });
-        g.position.set(origin.x, origin.y);
-        this.effectsLayer.addChild(g);
-        this.smokePool.push({
-          g,
-          baseX: origin.x,
-          baseY: origin.y,
-          age: i * 35,
-          maxAge: 75,
-          driftX: i % 2 === 0 ? 0.25 : -0.2,
-        });
+      for (const origin of smokeOrigins) {
+        for (let i = 0; i < 2; i++) {
+          const radius = Math.max(1.5, 2 * smokeThickness);
+          const g = new Graphics().circle(0, 0, radius).fill({ color: smokeColor, alpha: 0.5 });
+          g.position.set(origin.x, origin.y);
+          this.effectsLayer.addChild(g);
+          this.smokePool.push({ g, baseX: origin.x, baseY: origin.y, age: i * 35, maxAge: 75, driftX: i % 2 === 0 ? 0.25 : -0.2 });
+        }
       }
     }
   }
 
-  public update(): void {
+  public update(dt = 0.033, viewBounds?: ViewportBounds, reducedMotion = false): void {
+    if (this.lifeSystem) this.lifeSystem.update(dt, viewBounds, reducedMotion);
+    if (reducedMotion) return;
+
     this.time += 0.035;
 
-    // 1. Update walking citizens and carts along paths (no per-frame allocation)
+    // Legacy actor updates
     const halfW = TILE_WIDTH / 2;
     const halfH = TILE_HEIGHT / 2;
-    for (let a = 0; a < this.actorSprites.length; a++) {
-      const { spr, def } = this.actorSprites[a];
-      const path = def.path;
-      if (path.length < 2) continue;
-
-      // Ping-pong loop along path with a short pause at both ends
+    for (const { spr, def } of this.actorSprites) {
+      if (def.path.length < 2) continue;
       const cycle = (this.time * def.speed + def.phase) % 2;
       const progress = dwellProgress(cycle);
-      const totalSegments = path.length - 1;
-      const exactIndex = progress * totalSegments;
-      const idx = Math.min(Math.floor(exactIndex), totalSegments - 1);
-      const frac = exactIndex - idx;
-
-      const p0 = path[idx];
-      const p1 = path[idx + 1];
-
+      const total = def.path.length - 1;
+      const idx = Math.min(Math.floor(progress * total), total - 1);
+      const frac = progress * total - idx;
+      const p0 = def.path[idx];
+      const p1 = def.path[idx + 1];
       const curX = p0.x + (p1.x - p0.x) * frac;
       const curY = p0.y + (p1.y - p0.y) * frac;
       spr.position.set((curX - curY) * halfW, (curX + curY) * halfH);
-
-      // Flip sprite facing direction
-      const goingForward = cycle <= 1;
-      spr.scale.x = (goingForward ? 1 : -1) * (p1.x >= p0.x ? 1 : -1);
+      spr.scale.x = (cycle <= 1 ? 1 : -1) * (p1.x >= p0.x ? 1 : -1);
     }
 
-    // 2. Update chimney smoke particles
+    // Legacy smoke update
     for (const p of this.smokePool) {
       p.age += 1;
       if (p.age >= p.maxAge) {
@@ -326,6 +325,7 @@ export class IsoAnimationManager {
   }
 
   public clear(): void {
+    this.lifeSystem?.clear();
     this.actorsLayer.removeChildren();
     this.effectsLayer.removeChildren();
     this.actorSprites = [];
@@ -337,6 +337,7 @@ export class IsoAnimationManager {
   }
 
   public destroy(): void {
+    this.lifeSystem?.destroy();
     this.clear();
   }
 }
