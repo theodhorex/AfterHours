@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@near-wallet-selector/core": "8.9.15",
+    "@near-wallet-selector/modal-ui": "8.9.15",
+    "@near-wallet-selector/my-near-wallet": "8.9.15",
     "gsap": "3.12.5",
     "lenis": "1.1.13",
     "next": "16.4.3",
