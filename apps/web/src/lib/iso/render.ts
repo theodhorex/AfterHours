@@ -15,7 +15,9 @@ import { bakeGround } from "./ground-bake.ts";
 import { isoToScreen, depthSortKey, isClick, getTileVariant, getMapScreenBounds } from "./iso-math.ts";
 import { IsoTextureManager } from "./sprites.ts";
 import { IsoAnimationManager, generateActors } from "./animation.ts";
-import { IsoWeatherManager } from "./weather.ts";
+import { IsoLightSystem } from "./light-system.ts";
+import { IsoWeatherSystem } from "./weather-system.ts";
+import { getLightTint } from "./light-curve.ts";
 import { getTheme, type ThemeTokens } from "./theme.ts";
 import { drawDistrictHighlights, makeBuildingBadge, BubblePoolManager } from "./render-ui.ts";
 import { getReducedMotion } from "../a11y/reduced-motion.ts";
@@ -168,7 +170,8 @@ export class IsoCityScene {
   private entitiesLayer = new Container();
   private actorsLayer = new Container();
   private effectsLayer = new Container();
-  private weatherManager = new IsoWeatherManager();
+  private lightSystem = new IsoLightSystem();
+  private weatherSystem = new IsoWeatherSystem();
   private bubbleManager: BubblePoolManager;
   private overlayLayer = new Container();
   private uiLayer = new Container();
@@ -236,8 +239,9 @@ export class IsoCityScene {
       this.entitiesLayer,
       this.actorsLayer,
       this.effectsLayer,
+      this.lightSystem.layer,
       this.bubbleManager.layer,
-      this.weatherManager.layer,
+      this.weatherSystem.layer,
       this.overlayLayer,
       this.uiLayer
     );
@@ -292,7 +296,8 @@ export class IsoCityScene {
 
     const theme = getTheme(arcId, season);
     this.currentTheme = theme;
-    this.root.tint = theme.ambientTint;
+    this.root.tint = getLightTint(this.lightSystem.timeT, theme.ambientTint);
+    this.lightSystem.setLayout(layout);
 
     this.clearScene();
     const tm = this.textureManager;
@@ -505,8 +510,8 @@ export class IsoCityScene {
       this.entitiesLayer.addChild(item.container);
     }
 
-    // 5. Setup Weather Particle Layer (pooled, max 80, disabled with reduced motion)
-    this.weatherManager.setWeather(theme.weather, theme, this.allowMotion);
+    // 5. Setup Weather Particle Layer (pooled, max 120, disabled with reduced motion)
+    this.weatherSystem.setSeason(season, this.allowMotion, this.lightSystem.timeT);
 
     // 6. Setup Life Animation (smoke, glows, trees, traffic)
     if (this.allowMotion) {
@@ -576,12 +581,12 @@ export class IsoCityScene {
     if (!this.currentArcId) return;
     const theme = getTheme(this.currentArcId, season);
     this.currentTheme = theme;
-    this.root.tint = theme.ambientTint;
+    this.root.tint = getLightTint(this.lightSystem.timeT, theme.ambientTint);
     if (this.groundSprite && this.currentTerrain) {
       this.groundSprite.texture = this.groundTexture(this.currentTerrain, theme, this.currentArcId, season);
       this.positionGround(this.currentArcId, this.currentTerrain);
     }
-    this.weatherManager.setWeather(theme.weather, theme, allowMotion);
+    this.weatherSystem.setSeason(season, allowMotion, this.lightSystem.timeT);
     if (bubbles && this.currentLayout) {
       this.bubbleManager.update(bubbles, this.currentLayout);
     }
@@ -652,6 +657,8 @@ export class IsoCityScene {
   private onTick = (): void => {
     const isReduced = getReducedMotion() || !this.allowMotion;
     const dt = Math.min(0.1, (this.app.ticker.deltaMS || 16.6) / 1000);
+    const baseAmbient = this.currentTheme?.ambientTint ?? 0xfffef6;
+
     if (this.allowMotion) {
       if (this.popInTargets.length > 0 && !isReduced) {
         for (let i = this.popInTargets.length - 1; i >= 0; i--) {
@@ -665,9 +672,13 @@ export class IsoCityScene {
           }
         }
       }
+      this.lightSystem.update(dt, this.root, baseAmbient, undefined, !isReduced);
+      this.weatherSystem.update(dt, this.lightSystem.timeT, undefined, !isReduced);
       this.animManager.update(dt, undefined, isReduced);
-      this.weatherManager.update();
       this.bubbleManager.tick(!isReduced);
+    } else {
+      this.lightSystem.update(0, this.root, baseAmbient, undefined, false);
+      this.weatherSystem.clear();
     }
   };
 
@@ -685,7 +696,6 @@ export class IsoCityScene {
     this.selBadge = null;
     this.bubbleManager.clear();
     this.animManager.clear();
-    this.weatherManager.clear();
   }
 
   public destroy(): void {
@@ -696,7 +706,8 @@ export class IsoCityScene {
     this.clearScene();
     this.bubbleManager.destroy();
     this.animManager.destroy();
-    this.weatherManager.destroy();
+    this.lightSystem.destroy();
+    this.weatherSystem.destroy();
     this.textureManager.destroy();
     this.root.destroy({ children: true });
   }
