@@ -40,6 +40,13 @@ interface SimulationControlsProps {
   onChangeTimelapseRate?: (rate: number) => void;
 }
 
+const ARC_NAMES: Record<string, string> = {
+  goblin_warrens: "Goblin Warrens",
+  cave_hold: "Cave Hold",
+  dino_vale: "Dino Vale",
+  elf_grove: "Elf Grove",
+};
+
 export function SimulationControls({
   arcId,
   seed,
@@ -149,13 +156,12 @@ export function SimulationControls({
             <select
               id="arc-select"
               value={arcId}
-              disabled={isRunning}
               onChange={(e) => onSelectArc(e.target.value)}
               className="min-h-[44px] bg-ledger-night border border-ledger-twilight text-ledger-paper px-2.5 py-1.5 rounded-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-ledger-brass"
             >
               {availableArcs.map((id) => (
                 <option key={id} value={id}>
-                  {id === "goblin_warrens" ? "Goblin Warrens" : id === "cave_hold" ? "Cave Hold" : id}
+                  {ARC_NAMES[id] ?? id}
                 </option>
               ))}
             </select>
@@ -167,7 +173,6 @@ export function SimulationControls({
               id="seed-input"
               type="text"
               value={seed}
-              disabled={isRunning}
               onChange={(e) => onChangeSeed(e.target.value)}
               className="min-h-[44px] bg-ledger-night border border-ledger-twilight text-ledger-brass px-2.5 py-1.5 rounded-xs w-28 sm:w-32 focus-visible:outline-2 focus-visible:outline-ledger-brass font-mono"
               placeholder="world_seed"

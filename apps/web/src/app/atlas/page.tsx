@@ -127,8 +127,8 @@ export default function CityViewPage() {
   const handleSelectArc = useCallback(
     (newArcId: string) => {
       setArcId(newArcId);
-      setIsRunning(false);
-      setStepsRemaining(0);
+      setIsRunning(true);
+      setStepsRemaining(10000);
       setError(null);
       try {
         setWorld(createWorld(newArcId, seed));
